@@ -24,8 +24,8 @@ async function callGemini(systemInstruction: string, userPrompt: string): Promis
     throw new Error('GEMINI_API_KEY is not defined in environment variables');
   }
 
-  // Use gemini-3.5-flash with thinkingBudget 0 for instantaneous radio quips without token exhaustion
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+  // Use gemini-flash-latest with thinkingBudget 0 for instantaneous radio quips without token exhaustion
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
 
   const payload = {
     system_instruction: {
@@ -385,17 +385,19 @@ Target duration: 25-35 seconds of fast-paced broadcast dialogue. Do NOT include 
 `;
 
   const userPrompt = `
-Give an on-air traffic update from your attack helicopter flying over Gauteng.
+Give an on-air traffic update from your studio traffic desk analyzing live telemetry screens and cameras across Gauteng.
+Focus strictly on the primary highway arteries: R59, N1, N12, R24, R21, N3, N4 (Pretoria to Rustenburg corridor), and M1.
+NEVER reference local suburban backstreets, minor residential avenues, or irrelevant side roads.
 Here is the current live highway situation:
 ${trafficContext}
 
-Reference real locations like the Buccleuch interchange, N1, M1, or R21. Treat commuter traffic like an aerial combat dogfight. Keep it punchy and hysterical.
+Reference real locations along these primary corridors (like Buccleuch, Gillooly's, Reading Interchange, Allandale, Double Decker, etc.). You are IN THE STUDIO at your multi-screen traffic console (NOT IN A CHOPPER). Treat commuter traffic with high-stakes, breathless, intense urgency (Tom Cruise / Maverick intensity). Keep it fast, accurate, punchy, and dramatic. Conclude with "Back to the studio!"
 `;
 
   try {
     const spokenText = await callGemini(systemInstruction, userPrompt);
     return {
-      title: 'Chopper Maverick Traffic Report',
+      title: 'Simon Carter Traffic Desk Report',
       turns: [
         {
           speaker: simon.name,
@@ -407,10 +409,12 @@ Reference real locations like the Buccleuch interchange, N1, M1, or R21. Treat c
       estimatedDurationSeconds: Math.ceil(spokenText.split(' ').length / 2.5),
     };
   } catch {
-    // Offline satirical fallback
-    const fallbackText = "Tower, this is Maverick in Chopper One over the Buccleuch interchange! We have a complete lock-on! Commuters are boxed in from all vectors, four lanes of stationary Toyota Corollas with zero escape velocity! Over on the M1 South, a flatbed carrying secondhand scrap copper has deployed a defensive smoke screen! If you're heading toward Sandton, eject! I repeat, eject into the nearest drainage ditch! Back to the studio!";
+    // Realistic fallback based on real telemetry without fabricated incidents
+    const fallbackText = trafficContext && trafficContext.includes(':')
+      ? `Carter at the traffic desk! Telemetry screens flagging incidents on the grid: ${trafficContext}. Speeds are crawling in those zones, so keep your distance! Back to the studio!`
+      : "Simon Carter at the traffic desk! Real-time highway telemetry across Gauteng is showing clean lines on the N1, M1, and Buccleuch. Zero major delays flagged on the grid right now. Keep your speeds steady, stay sharp, and keep moving. Back to the studio!";
     return {
-      title: 'Chopper Maverick Traffic Report (Cached)',
+      title: 'Simon Carter Traffic Desk Report',
       turns: [
         {
           speaker: simon.name,
@@ -419,7 +423,7 @@ Reference real locations like the Buccleuch interchange, N1, M1, or R21. Treat c
           text: fallbackText,
         },
       ],
-      estimatedDurationSeconds: 28,
+      estimatedDurationSeconds: 20,
     };
   }
 }

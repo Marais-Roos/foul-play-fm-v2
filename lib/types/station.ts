@@ -38,6 +38,7 @@ export interface Show {
   vibe: string;
   shortDescription: string;
   detailedDescription: string;
+  description?: string;
   jellyfinPlaylistId?: string;
   coverImage?: any;
   imageUrl?: string;
@@ -51,6 +52,8 @@ export interface DJ {
   personality: string;
   voiceSampleFile: string;
   fishAudioVoiceId: string | null;
+  voicePrompt?: string;
+  bio?: string;
 }
 
 export interface SideCharacter {
@@ -76,6 +79,7 @@ export interface CallerPersona {
   voiceDesignPrompt: string;
   recommendedPreviewText: string;
   fishAudioVoiceId: string | null;
+  voicePrompt?: string;
 }
 
 export interface StationBible {

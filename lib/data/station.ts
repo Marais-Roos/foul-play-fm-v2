@@ -1,5 +1,7 @@
 import rawStationBible from './station-bible.json' with { type: 'json' };
 import { StationBible, Show, DJ, SideCharacter, CallerPersona } from '../types/station';
+import { client, isSanityConfigured } from '@/sanity/lib/client';
+import { SHOWS_QUERY, PRESENTERS_QUERY, CALLERS_QUERY } from '@/sanity/lib/queries';
 
 export const DEFAULT_SHOW_IMAGES: Record<string, string> = {
   'truckers-tales-tacky-talk': 'https://cdn.sanity.io/images/fkbibl7o/production/90be52f1115123dca27e7ea6835fb67f31b3f1ab-1024x1024.png',
@@ -20,6 +22,139 @@ export const stationBible: StationBible = {
     imageUrl: DEFAULT_SHOW_IMAGES[s.id] || undefined,
   })),
 } as StationBible;
+
+// In-memory cache for Sanity queries to avoid rate limits
+let cachedSanityShows: Show[] | null = null;
+let cachedSanityDJs: DJ[] | null = null;
+let cachedSanityCallers: CallerPersona[] | null = null;
+let lastCacheTime = 0;
+const CACHE_TTL_MS = 30000; // 30 seconds
+
+/**
+ * Fetch shows dynamically from Sanity CMS with station bible fallback
+ */
+export async function fetchSanityShows(): Promise<Show[]> {
+  const now = Date.now();
+  if (cachedSanityShows && now - lastCacheTime < CACHE_TTL_MS) {
+    return cachedSanityShows;
+  }
+  if (!isSanityConfigured) return stationBible.shows;
+
+  try {
+    const rawShows = await client.fetch(SHOWS_QUERY);
+    if (Array.isArray(rawShows) && rawShows.length > 0) {
+      const mapped: Show[] = rawShows.map((s: any) => {
+        const startHour = typeof s.timeSlot === 'number' ? s.timeSlot : parseInt(s.timeSlot || '0', 10);
+        const endHour = (startHour + 3) % 24;
+        const hostIds = s.hosts?.map((h: any) => h.slug || h._id) || [];
+        const hostNames = s.hosts?.map((h: any) => h.name).join(' & ') || 'Live Host';
+        const localShow = stationBible.shows.find(ls => ls.id === (s.slug || s._id) || ls.title === s.title);
+        return {
+          id: s.slug || s._id,
+          title: s.title,
+          description: s.description || localShow?.description || '',
+          shortDescription: s.description || localShow?.shortDescription || '',
+          detailedDescription: s.description || localShow?.detailedDescription || '',
+          vibe: s.vibe || localShow?.vibe || '',
+          topics: localShow?.topics || ['General banter', 'Current affairs'],
+          musicGenres: localShow?.musicGenres || ['Rock', 'Country', 'Variety'],
+          jellyfinPlaylistId: s.jellyfinPlaylistId || localShow?.jellyfinPlaylistId || '',
+          timeSlot: {
+            start: `${startHour.toString().padStart(2, '0')}:00`,
+            end: `${endHour.toString().padStart(2, '0')}:00`,
+            startHour,
+            endHour,
+          },
+          hostIds: hostIds.length > 0 ? hostIds : (localShow?.hostIds || []),
+          hostNames: hostNames || (localShow?.hostNames || 'Live Host'),
+          imageUrl: s.coverImage ? undefined : (localShow?.imageUrl || DEFAULT_SHOW_IMAGES[s.slug || s._id]),
+          coverImage: s.coverImage,
+        };
+      });
+      cachedSanityShows = mapped;
+      lastCacheTime = now;
+      return mapped;
+    }
+  } catch (err) {
+    console.warn('Could not query Sanity shows, using fallback station bible:', err);
+  }
+  return stationBible.shows;
+}
+
+/**
+ * Fetch presenters dynamically from Sanity CMS with station bible fallback
+ */
+export async function fetchSanityPresenters(): Promise<DJ[]> {
+  const now = Date.now();
+  if (cachedSanityDJs && now - lastCacheTime < CACHE_TTL_MS) {
+    return cachedSanityDJs;
+  }
+  if (!isSanityConfigured) return stationBible.djs;
+
+  try {
+    const rawPresenters = await client.fetch(PRESENTERS_QUERY);
+    if (Array.isArray(rawPresenters) && rawPresenters.length > 0) {
+      const mapped: DJ[] = rawPresenters.map((p: any) => {
+        const localDj = stationBible.djs.find(d => d.id === (p.slug || p._id) || d.name === p.name);
+        return {
+          id: p.slug || p._id,
+          name: p.name,
+          parodyOf: p.parodyOf || localDj?.parodyOf || '',
+          description: p.bio || localDj?.description || '',
+          personality: p.voicePrompt || localDj?.personality || '',
+          voiceSampleFile: localDj?.voiceSampleFile || '',
+          fishAudioVoiceId: localDj?.fishAudioVoiceId || null,
+          voicePrompt: p.voicePrompt,
+          bio: p.bio,
+        };
+      });
+      cachedSanityDJs = mapped;
+      lastCacheTime = now;
+      return mapped;
+    }
+  } catch (err) {
+    console.warn('Could not query Sanity presenters, using fallback station bible:', err);
+  }
+  return stationBible.djs;
+}
+
+/**
+ * Fetch callers dynamically from Sanity CMS with station bible fallback
+ */
+export async function fetchSanityCallers(): Promise<CallerPersona[]> {
+  const now = Date.now();
+  if (cachedSanityCallers && now - lastCacheTime < CACHE_TTL_MS) {
+    return cachedSanityCallers;
+  }
+  if (!isSanityConfigured) return stationBible.callers;
+
+  try {
+    const rawCallers = await client.fetch(CALLERS_QUERY);
+    if (Array.isArray(rawCallers) && rawCallers.length > 0) {
+      const mapped: CallerPersona[] = rawCallers.map((c: any) => {
+        const localCaller = stationBible.callers.find(lc => lc.voiceTag === c.voiceTag);
+        return {
+          id: c.voiceTag || c._id,
+          voiceTag: c.voiceTag,
+          archetype: c.archetype,
+          targetOfSatire: c.targetOfSatire || localCaller?.targetOfSatire || '',
+          aiContextStrategy: c.contextStrategy || localCaller?.aiContextStrategy || '',
+          description: localCaller?.description || c.sampleQuote || '',
+          voiceDesignPrompt: localCaller?.voiceDesignPrompt || '',
+          recommendedPreviewText: c.sampleQuote || localCaller?.recommendedPreviewText || '',
+          fishAudioVoiceId: localCaller?.fishAudioVoiceId || null,
+          voicePrompt: c.voicePrompt,
+        };
+      });
+      cachedSanityCallers = mapped;
+      lastCacheTime = now;
+      return mapped;
+    }
+  } catch (err) {
+    console.warn('Could not query Sanity callers, using fallback station bible:', err);
+  }
+  return stationBible.callers;
+}
 
 /**
  * Returns the currently scheduled show based on local time (or provided date).

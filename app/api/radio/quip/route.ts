@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { stationBible, getCurrentShow, getShowById, getDJById, getSideCharacterById, getCallerByVoiceTag } from '@/lib/data/station';
+import {
+  stationBible,
+  getCurrentShow,
+  getShowById,
+  getDJById,
+  getSideCharacterById,
+  getCallerByVoiceTag,
+  fetchSanityShows,
+  fetchSanityPresenters,
+  fetchSanityCallers,
+} from '@/lib/data/station';
 import { DJ } from '@/lib/types/station';
 import {
   generateHostQuip,
@@ -11,6 +21,7 @@ import {
   generateShowBanterOrMonologue,
 } from '@/lib/services/gemini';
 import { synthesizeClonedSpeech } from '@/lib/services/fish-audio';
+import { fetchTomTomGautengTraffic } from '@/lib/services/bulletin-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,17 +42,28 @@ export async function POST(request: NextRequest) {
       isFirstCycle,
     } = body;
 
-    // 1. Identify Show
-    const show = showId ? getShowById(showId) || getCurrentShow() : getCurrentShow();
+    // Load Sanity data with station-bible fallback
+    const [sanityShows, sanityPresenters, sanityCallers] = await Promise.all([
+      fetchSanityShows(),
+      fetchSanityPresenters(),
+      fetchSanityCallers(),
+    ]);
+
+    // 1. Identify Show (Sanity first)
+    const show = (showId ? sanityShows.find(s => s.id === showId || s.id.includes(showId) || showId.includes(s.id)) : null) ||
+                 (showId ? getShowById(showId) : null) ||
+                 getCurrentShow();
     let speakerName = '';
     let spokenText = '';
     let characterRole: 'host' | 'sidekick' | 'caller' = 'host';
     let audioBuffer: Buffer;
 
-    // 2. Identify Character routing
-    const dj = characterId ? getDJById(characterId) : null;
+    // 2. Identify Character routing (Sanity first)
+    const dj = (characterId ? sanityPresenters.find(p => p.id === characterId || p.id.includes(characterId) || p.name.toLowerCase() === characterId.toLowerCase()) : null) ||
+               (characterId ? getDJById(characterId) : null);
     const sideChar = characterId ? getSideCharacterById(characterId) : null;
-    const caller = callerId ? getCallerByVoiceTag(callerId) : null;
+    const caller = (callerId ? sanityCallers.find(c => c.voiceTag === callerId || c.id === callerId) : null) ||
+                   (callerId ? getCallerByVoiceTag(callerId) : null);
 
     if (sideChar) {
       // Single side character trigger (e.g. Simon Carter, Dividend Dave)
@@ -52,9 +74,16 @@ export async function POST(request: NextRequest) {
       if (customText) {
         spokenText = customText;
       } else if (sideChar.id === 'simon-carter' || type === 'traffic') {
-        const trafficReport = await generateSimonCarterTraffic(
-          topic || 'Buccleuch interchange gridlocked due to a stationary flatbed carrying stolen municipal transformers'
-        );
+        let trafficContext = topic;
+        if (!trafficContext) {
+          const liveIncidents = await fetchTomTomGautengTraffic();
+          if (liveIncidents.length > 0) {
+            trafficContext = `LIVE TOMTOM HIGHWAY INCIDENTS:\n${liveIncidents.join('\n')}`;
+          } else {
+            trafficContext = 'Real-time telemetry monitors show all major corridors (N1, M1, R21, Buccleuch) running clear with no active incident delays reported on the grid.';
+          }
+        }
+        const trafficReport = await generateSimonCarterTraffic(trafficContext);
         spokenText = trafficReport.turns[0]?.text || sideChar.recommendedPreviewText;
       } else {
         const quip = await generateSideCharacterQuip(sideChar, topic);
@@ -86,7 +115,10 @@ export async function POST(request: NextRequest) {
     } else if (type === 'caller' && caller) {
       // Caller segment
       const hostId = show.hostIds[0];
-      const host = getDJById(hostId) || stationBible.djs[0];
+      const host = sanityPresenters.find(p => p.id === hostId || p.id.includes(hostId)) ||
+                   getDJById(hostId) ||
+                   sanityPresenters[0] ||
+                   stationBible.djs[0];
       speakerName = host.name;
       const voiceId = host.fishAudioVoiceId || '67c1ae8d7ee6462e986ec936d6ccbc98';
       characterRole = 'caller';
@@ -102,8 +134,10 @@ export async function POST(request: NextRequest) {
       // 3. Show-level trigger: Multi-host Banter or Solo Host Monologue
       characterRole = 'host';
       const hostIds = show.hostIds || [];
-      const hosts = hostIds.map(id => getDJById(id)).filter((d): d is DJ => !!d);
-      const effectiveHosts = hosts.length > 0 ? hosts : [stationBible.djs[0]];
+      const hosts = hostIds
+        .map(id => sanityPresenters.find(p => p.id === id || p.id.includes(id)) || getDJById(id))
+        .filter((d): d is DJ => !!d);
+      const effectiveHosts = hosts.length > 0 ? hosts : [sanityPresenters[0] || stationBible.djs[0]];
 
       if (customText) {
         speakerName = effectiveHosts[0].name;

@@ -1,21 +1,74 @@
-"use client";
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { stationBible } from "@/lib/data/station";
 import { useAudioPlayer } from "../audio-context";
-import { Radio, Plane, PhoneCall, CloudRain, AlertTriangle, Play, Sparkles } from "lucide-react";
+import { Radio, PhoneCall, Sparkles, Newspaper, Trophy, Navigation, Clock } from "lucide-react";
+
+interface TrafficIncident {
+  id: string;
+  road: string;
+  description: string;
+  from?: string;
+  to?: string;
+  delayMinutes: number;
+}
 
 export function LiveView() {
-  const { currentShow, triggerVoiceQuip, isDucking, isGeneratingVoice, activeSpeaker, isPlaying } = useAudioPlayer();
+  const {
+    currentShow,
+    triggerVoiceQuip,
+    isDucking,
+    isGeneratingVoice,
+    activeSpeaker,
+    isPlaying,
+    isBulletinPlaying,
+    triggerHourlyBulletin,
+  } = useAudioPlayer();
   const [selectedCallerTag, setSelectedCallerTag] = useState<string>("THE_ZEF");
+
+  // Real TomTom Telemetry State
+  const [trafficIncidents, setTrafficIncidents] = useState<TrafficIncident[]>([]);
+  const [isLoadingTraffic, setIsLoadingTraffic] = useState(false);
+  const [trafficQueried, setTrafficQueried] = useState(false);
 
   const callers = stationBible.callers;
   const selectedCaller = callers.find((c) => c.voiceTag === selectedCallerTag) || callers[0];
 
-  const handleTrafficChopper = () => {
+  const refreshTraffic = async () => {
+    setIsLoadingTraffic(true);
+    try {
+      const res = await fetch("/api/radio/traffic");
+      if (res.ok) {
+        const data = await res.json();
+        setTrafficIncidents(data.incidents || []);
+      }
+    } catch {
+      setTrafficIncidents([]);
+    } finally {
+      setIsLoadingTraffic(false);
+      setTrafficQueried(true);
+    }
+  };
+
+  useEffect(() => {
+    refreshTraffic();
+  }, []);
+
+  const handleTrafficDesk = () => {
+    const incidentText =
+      trafficIncidents.length > 0
+        ? trafficIncidents
+            .map(
+              (i) =>
+                `${i.road}: ${i.description}${
+                  i.delayMinutes > 0 ? ` (+${i.delayMinutes} min delay)` : ""
+                }`
+            )
+            .join(". ")
+        : undefined;
+
     triggerVoiceQuip("simon-carter", {
       type: "traffic",
-      topic: "N1 Buccleuch interchange gridlock with minibus taxis dogfighting for the emergency lane"
+      topic: incidentText,
     });
   };
 
@@ -33,7 +86,8 @@ export function LiveView() {
       <div className="p-6 rounded-2xl bg-gradient-to-r from-[#182010] via-[#141414] to-[#120F1E] border border-[#27272A] flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#CCFF00] animate-ping" />
+            {/* Subtle, calm on-air status indicator (no rapid flashing) */}
+            <span className="w-2 h-2 rounded-full bg-[#CCFF00] opacity-80" />
             <span className="text-xs font-bold uppercase tracking-wider text-[#CCFF00]">
               LIVE ON AIR — 98.4 FM
             </span>
@@ -42,7 +96,7 @@ export function LiveView() {
             {currentShow.title}
           </h1>
           <p className="text-sm text-[#9CA3AF]">
-            Broadcasting to Pretoria, Johannesburg, Brits, and the Vaal Basin.
+            Broadcasting to Pretoria, Johannesburg, Brits, and the Vaal Triangle.
           </p>
         </div>
 
@@ -54,60 +108,193 @@ export function LiveView() {
         </div>
       </div>
 
+      {/* Top-of-the-Hour Broadcast Bulletin Master Card */}
+      <div className="p-6 rounded-2xl bg-[#141416] border border-[#27272A] space-y-5">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Clock size={16} className="text-[#CCFF00]" />
+              <h2 className="text-lg font-bold text-[#F3F4F6] font-[family-name:var(--font-heading)]">
+                Top-of-the-Hour Broadcast Bulletin
+              </h2>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 font-bold uppercase">
+                NewsAPI • TomTom • Weather
+              </span>
+            </div>
+            <p className="text-xs text-[#9CA3AF] max-w-2xl">
+              Fires automatically at :00 on the station schedule, or test on-demand below. Real factual South African headlines with a sharp libertarian take, targeted sports (Rugby, Football, Cricket), and live TomTom highway incident telemetry.
+            </p>
+          </div>
+
+          <button
+            onClick={() => triggerHourlyBulletin()}
+            disabled={isBulletinPlaying || isGeneratingVoice}
+            className={`py-3 px-5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg disabled:opacity-50 shrink-0 ${
+              isBulletinPlaying
+                ? "bg-[#CCFF00] text-black ring-2 ring-[#CCFF00]/50 animate-pulse"
+                : isGeneratingVoice
+                ? "bg-[#7C3AED] text-white animate-pulse"
+                : "bg-[#CCFF00] text-black hover:bg-[#b8e600] shadow-[#CCFF00]/10"
+            }`}
+          >
+            <Sparkles size={15} />
+            <span>
+              {isBulletinPlaying
+                ? "Broadcasting Bulletin Live..."
+                : isGeneratingVoice
+                ? "Synthesizing NewsAPI & TomTom..."
+                : "Air Top-of-Hour Bulletin Now"}
+            </span>
+          </button>
+        </div>
+
+        {/* 3 Anchor Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          {/* 1. Gavin Stone */}
+          <div className="p-4 rounded-xl bg-[#1A1A1E] border border-[#2A2A30] space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Newspaper size={16} className="text-[#CCFF00]" />
+                <h4 className="text-sm font-bold text-[#F3F4F6]">Gavin Stone</h4>
+              </div>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                News & Weather
+              </span>
+            </div>
+            <p className="text-xs text-[#9CA3AF] leading-relaxed">
+              Reports real SA headlines (healthcare, economy, state spending) with dry libertarian scepticism of bureaucratic waste. Delivers live Gauteng weather.
+            </p>
+          </div>
+
+          {/* 2. Gary Miller */}
+          <div className="p-4 rounded-xl bg-[#1A1A1E] border border-[#2A2A30] space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Trophy size={16} className="text-[#9055FF]" />
+                <h4 className="text-sm font-bold text-[#F3F4F6]">Gary Miller</h4>
+              </div>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                Sport
+              </span>
+            </div>
+            <p className="text-xs text-[#9CA3AF] leading-relaxed">
+              Roy Keane-style cynical punditry. Covers Springboks, Vodacom Bulls (URC), Premier League, Man United, Barca, and Proteas. Zero American sports.
+            </p>
+          </div>
+
+          {/* 3. Simon Carter */}
+          <div className="p-4 rounded-xl bg-[#1A1A1E] border border-[#2A2A30] space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Navigation size={16} className="text-[#F59E0B]" />
+                <h4 className="text-sm font-bold text-[#F3F4F6]">Simon Carter</h4>
+              </div>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                Traffic Desk
+              </span>
+            </div>
+            <p className="text-xs text-[#9CA3AF] leading-relaxed">
+              Studio traffic desk anchor. High-stakes Tom Cruise intensity tracking live TomTom delays across the R59, N1, N12, R24, R21, N3, N4, and M1.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 1. Simon Carter's Traffic Chopper Radar */}
+        {/* 1. Simon Carter's Studio Traffic Desk */}
         <div className="p-5 rounded-2xl bg-[#141414] border border-[#232326] space-y-4 flex flex-col justify-between">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Plane size={18} className="text-[#CCFF00]" />
+                <Navigation size={18} className="text-[#CCFF00]" />
                 <h3 className="text-base font-bold text-[#F3F4F6] font-[family-name:var(--font-heading)]">
-                  Chopper One Traffic Radar
+                  Simon Carter&apos;s Traffic Desk
                 </h3>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-800/40">
-                AIRBORNE
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 font-bold">
+                TOMTOM LIVE
               </span>
             </div>
 
             <p className="text-xs text-[#9CA3AF] leading-relaxed">
-              Simon Carter (&quot;Maverick&quot;) is flying an attack helicopter over the Buccleuch interchange dogfighting commuter taxis.
+              Stationed at the studio traffic console monitoring live telemetry across the R59, N1, N12, R24, R21, N3, N4, and M1.
             </p>
 
-            <div className="space-y-2 pt-2">
-              <div className="p-2.5 rounded-lg bg-[#1C1C1E] border border-[#27272A] text-xs space-y-1">
-                <div className="flex justify-between font-semibold text-[#F3F4F6]">
-                  <span>N1 Buccleuch Gridlock</span>
-                  <span className="text-red-400 font-mono">+55 min</span>
+            {/* Real Telemetry Status: Clean display, zero fake cards */}
+            <div className="space-y-2 pt-1">
+              {isLoadingTraffic && !trafficQueried ? (
+                <div className="p-3.5 rounded-xl bg-[#18181A] border border-[#27272A] text-xs text-[#9CA3AF] flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#CCFF00] animate-pulse" />
+                  <span>Checking live TomTom telemetry...</span>
                 </div>
-                <p className="text-[11px] text-[#A1A1AA]">
-                  All lanes blocked; commuters trading biltong.
-                </p>
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-[#1C1C1E] border border-[#27272A] text-xs space-y-1">
-                <div className="flex justify-between font-semibold text-[#F3F4F6]">
-                  <span>M1 Double Decker</span>
-                  <span className="text-amber-400 font-mono">+35 min</span>
+              ) : trafficIncidents.length === 0 ? (
+                <div className="p-3.5 rounded-xl bg-[#18181A] border border-[#27272A] text-xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-[#CCFF00] flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#CCFF00]" />
+                      Corridors Clear
+                    </span>
+                    <button
+                      onClick={refreshTraffic}
+                      disabled={isLoadingTraffic}
+                      className="text-[10px] text-[#9CA3AF] hover:text-[#CCFF00] transition-colors cursor-pointer"
+                    >
+                      {isLoadingTraffic ? "Checking..." : "Refresh"}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-[#A1A1AA] leading-relaxed">
+                    Zero active incident delays reported on the telemetry grid across the R59, N1, N12, R24, R21, N3, N4, or M1.
+                  </p>
                 </div>
-                <p className="text-[11px] text-[#A1A1AA]">
-                  Scrap copper flatbed rolled over before Empire Rd.
-                </p>
-              </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-0.5">
+                    <span className="text-[10px] font-mono uppercase text-[#A1A1AA]">
+                      Active Delays ({trafficIncidents.length})
+                    </span>
+                    <button
+                      onClick={refreshTraffic}
+                      disabled={isLoadingTraffic}
+                      className="text-[10px] text-[#9CA3AF] hover:text-[#CCFF00] transition-colors cursor-pointer"
+                    >
+                      {isLoadingTraffic ? "Refreshing..." : "Refresh"}
+                    </button>
+                  </div>
+                  {trafficIncidents.map((incident) => (
+                    <div
+                      key={incident.id}
+                      className="p-2.5 rounded-lg bg-[#1C1C1E] border border-[#27272A] text-xs space-y-1"
+                    >
+                      <div className="flex justify-between font-semibold text-[#F3F4F6]">
+                        <span className="truncate">{incident.road}</span>
+                        {incident.delayMinutes > 0 && (
+                          <span className="text-amber-400 font-mono text-[11px] shrink-0 ml-2">
+                            +{incident.delayMinutes} min
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-[#A1A1AA] line-clamp-2">
+                        {incident.description}
+                        {incident.from && incident.to ? ` (${incident.from} → ${incident.to})` : ""}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           <button
-            onClick={handleTrafficChopper}
+            onClick={handleTrafficDesk}
             disabled={isDucking || isGeneratingVoice}
             className="w-full py-2.5 px-4 rounded-xl bg-[#CCFF00] text-black font-bold text-xs flex items-center justify-center gap-2 hover:bg-[#b8e600] transition-colors cursor-pointer shadow-lg shadow-[#CCFF00]/10 disabled:opacity-50"
           >
-            <Plane size={15} />
+            <Navigation size={15} />
             <span>
               {isGeneratingVoice
-                ? "Calling Chopper One..."
+                ? "Connecting to Traffic Desk..."
                 : isDucking && activeSpeaker?.includes("Simon")
-                ? "Simon Carter Airborne..."
+                ? "Simon Carter On-Air..."
                 : "Patch Simon Carter (Traffic Audio)"}
             </span>
           </button>

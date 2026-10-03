@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { Show, DJ } from "@/lib/types/station";
 import { stationBible, getCurrentShow } from "@/lib/data/station";
-import { JellyfinTrack, FALLBACK_TRACKS } from "@/lib/services/jellyfin";
+import { JellyfinTrack } from "@/lib/services/jellyfin";
 
 export interface VoiceQuipOptions {
   type?: 'quip' | 'traffic' | 'caller' | 'commentary';
@@ -60,6 +60,8 @@ interface AudioContextType {
   triggerVoiceQuip: (characterId?: string, options?: VoiceQuipOptions) => Promise<void>;
   selectShow: (show: Show) => void;
   updateShowMetadata: (updates: Partial<Show>) => void;
+  isBulletinPlaying: boolean;
+  triggerHourlyBulletin: () => Promise<void>;
 }
 
 const AudioPlayerContext = createContext<AudioContextType | null>(null);
@@ -87,12 +89,40 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
   const [activeSpeaker, setActiveSpeaker] = useState<string | null>(null);
   const [activeTranscript, setActiveTranscript] = useState<string | null>(null);
+  const [isBulletinPlaying, setIsBulletinPlaying] = useState<boolean>(false);
+  const isBulletinPlayingRef = useRef<boolean>(false);
 
   const [currentShow, setCurrentShow] = useState<Show>(() => getCurrentShow());
-  const [playlist, setPlaylist] = useState<JellyfinTrack[]>(FALLBACK_TRACKS);
+  const [playlist, setPlaylist] = useState<JellyfinTrack[]>([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [recentlyPlayed, setRecentlyPlayed] = useState<JellyfinTrack[]>([]);
   const currentTrack = playlist[currentTrackIndex] || null;
+
+  // Load persistent broadcast history on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('foulplay_broadcast_history');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRecentlyPlayed(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load broadcast history from localStorage:', e);
+    }
+  }, []);
+
+  // Save persistent broadcast history on update
+  useEffect(() => {
+    if (recentlyPlayed.length > 0) {
+      try {
+        localStorage.setItem('foulplay_broadcast_history', JSON.stringify(recentlyPlayed));
+      } catch (e) {
+        console.warn('Failed to save broadcast history to localStorage:', e);
+      }
+    }
+  }, [recentlyPlayed]);
 
   // Clock State
   const [clockStep, setClockStep] = useState<ClockStep>('INITIAL_SWEEPER');
@@ -122,6 +152,9 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const prebufferedVoiceRef = useRef<PrebufferedVoice | null>(null);
   const prebufferPromiseRef = useRef<Promise<PrebufferedVoice | null> | null>(null);
   const pendingShowTransitionRef = useRef<boolean>(false);
+  const pendingHourlyBulletinRef = useRef<boolean>(false);
+  const lastBulletinHourRef = useRef<number>(-1);
+  const triggerHourlyBulletinRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     playlistRef.current = playlist;
@@ -186,23 +219,31 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     prebufferPromiseRef.current = promise;
   }, []);
 
-  // Helper to advance song index and record recently played
+  // Helper to record track start in persistent broadcast history
+  const recordSongStart = useCallback((track: JellyfinTrack) => {
+    const now = new Date();
+    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const show = currentShowRef.current;
+    const stampedTrack: JellyfinTrack = {
+      ...track,
+      playedAt: timeStr,
+      startedAt: now.getTime(),
+      showTitle: show?.title,
+    };
+
+    setRecentlyPlayed((prev) => {
+      const filtered = prev.filter((t) => t.id !== track.id);
+      return [stampedTrack, ...filtered].slice(0, 20);
+    });
+
+    return stampedTrack;
+  }, []);
+
+  // Helper to advance song index
   const advanceTrackIndex = useCallback(() => {
     const list = playlistRef.current;
     if (!list || list.length === 0) return;
     const currentIdx = currentTrackIndexRef.current;
-    const finishedTrack = list[currentIdx];
-    if (finishedTrack) {
-      if (!finishedTrack.playedAt) {
-        const now = new Date();
-        finishedTrack.playedAt = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-        finishedTrack.startedAt = now;
-      }
-      setRecentlyPlayed((prev) => {
-        const filtered = prev.filter((t) => t.id !== finishedTrack.id);
-        return [{ ...finishedTrack }, ...filtered].slice(0, 8);
-      });
-    }
     const nextIdx = (currentIdx + 1) % list.length;
     currentTrackIndexRef.current = nextIdx;
     setCurrentTrackIndex(nextIdx);
@@ -213,24 +254,21 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     const list = playlistRef.current;
     const track = list[currentTrackIndexRef.current];
     if (track && musicAudioRef.current) {
-      const now = new Date();
-      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      track.playedAt = timeStr;
-      track.startedAt = now;
+      const stampedTrack = recordSongStart(track);
 
       setCurrentBroadcastItem({
         type: 'song',
-        title: track.title,
-        subtitle: track.artist,
+        title: stampedTrack.title,
+        subtitle: stampedTrack.artist,
       });
-      musicAudioRef.current.src = track.streamUrl;
+      musicAudioRef.current.src = stampedTrack.streamUrl;
       musicAudioRef.current.play().catch((err: any) => {
         if (err?.name !== 'AbortError') {
           console.warn('Track play error:', err);
         }
       });
     }
-  }, []);
+  }, [recordSongStart]);
 
   // Master Broadcast Clock State Machine
   const advanceBroadcastClock = useCallback(async () => {
@@ -238,32 +276,27 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     const currentList = playlistRef.current;
     const show = currentShowRef.current;
 
-    // Handle scheduled live show transition at natural track boundary!
-    if (pendingShowTransitionRef.current) {
+    // Handle scheduled live show transition or top of hour bulletin at natural track boundary!
+    if (pendingHourlyBulletinRef.current || pendingShowTransitionRef.current) {
+      const isShowChange = pendingShowTransitionRef.current;
+      pendingHourlyBulletinRef.current = false;
       pendingShowTransitionRef.current = false;
-      clockStepRef.current = 'INITIAL_SWEEPER';
-      setClockStep('INITIAL_SWEEPER');
-      cycleCountRef.current = 1;
-      setCycleCount(1);
-      prebufferedVoiceRef.current = null;
-      prebufferPromiseRef.current = null;
-      setActiveSpeaker(null);
-      setActiveTranscript(null);
 
-      // Play Station Sweeper to mark the top of the hour show transition!
-      const sweeper = await fetchRandomR2Asset('random-sweeper');
-      if (sweeper && musicAudioRef.current) {
-        setCurrentBroadcastItem({
-          type: 'sweeper',
-          title: 'STATION SWEEPER',
-          subtitle: `${show.title} • 98.4 FM`,
-        });
-        musicAudioRef.current.src = sweeper.url;
-        musicAudioRef.current.play().catch(() => advanceBroadcastClock());
-      } else {
-        advanceBroadcastClock();
+      if (isShowChange) {
+        clockStepRef.current = 'INITIAL_SWEEPER';
+        setClockStep('INITIAL_SWEEPER');
+        cycleCountRef.current = 1;
+        setCycleCount(1);
+        prebufferedVoiceRef.current = null;
+        prebufferPromiseRef.current = null;
+        setActiveSpeaker(null);
+        setActiveTranscript(null);
       }
-      return;
+
+      if (triggerHourlyBulletinRef.current) {
+        await triggerHourlyBulletinRef.current();
+        return;
+      }
     }
 
     switch (currentStep) {
@@ -838,9 +871,19 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     });
   }, []);
 
-  // Auto-check live show rollover every 15 seconds
+  // Auto-check live show rollover and top-of-hour bulletin every 15 seconds
   useEffect(() => {
     const checkLiveShow = () => {
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+
+      // Top-of-hour bulletin detection (:00 or :01)
+      if (currentMinute <= 1 && lastBulletinHourRef.current !== currentHour) {
+        lastBulletinHourRef.current = currentHour;
+        pendingHourlyBulletinRef.current = true;
+      }
+
       const live = getCurrentShow();
       setCurrentShow((prev) => {
         if (prev.id !== live.id) {
@@ -867,6 +910,119 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     const interval = setInterval(checkLiveShow, 15000);
     return () => clearInterval(interval);
   }, [isPlaying]);
+
+  const triggerHourlyBulletin = useCallback(async () => {
+    if (isBulletinPlayingRef.current) return;
+    initAudio();
+
+    setIsBulletinPlaying(true);
+    isBulletinPlayingRef.current = true;
+    setIsGeneratingVoice(true);
+
+    try {
+      const res = await fetch('/api/radio/bulletin');
+      if (!res.ok) throw new Error('Bulletin fetch failed');
+      const data = await res.json();
+      setIsGeneratingVoice(false);
+
+      if (!data.success || !data.bulletin?.turns) {
+        throw new Error('Bulletin returned invalid payload');
+      }
+
+      const { introSweeperUrl, turns } = data.bulletin;
+
+      // 1. Duck / pause current music
+      if (musicAudioRef.current && isPlaying) {
+        musicAudioRef.current.pause();
+      }
+
+      // 2. Play News Intro Sweeper (from R2) if present
+      if (introSweeperUrl && musicAudioRef.current) {
+        const proxyUrl = `/api/radio/asset-stream?url=${encodeURIComponent(introSweeperUrl)}`;
+        setCurrentBroadcastItem({
+          type: 'sweeper',
+          title: 'NEWS & TRAFFIC INTRO',
+          subtitle: '98.4 FM Bulletin',
+        });
+        await new Promise<void>((resolve) => {
+          if (!musicAudioRef.current) return resolve();
+          musicAudioRef.current.src = proxyUrl;
+          musicAudioRef.current.onended = () => resolve();
+          musicAudioRef.current.play().catch(() => resolve());
+        });
+      }
+
+      // 3. Sequentially broadcast all 3 anchor turns:
+      // Turn 1: Gavin Stone (News & Weather)
+      // Turn 2: Gary Miller (Sport)
+      // Turn 3: Simon Carter (Traffic Desk)
+      for (const turn of turns) {
+        if (!voiceAudioRef.current) continue;
+
+        setActiveSpeaker(turn.anchorName);
+        setActiveTranscript(turn.text);
+        setCurrentBroadcastItem({
+          type: 'banter',
+          title: `${turn.anchorName} • ${turn.segment}`,
+          subtitle: '98.4 FM Live Bulletin',
+        });
+        isVoicePlayingRef.current = true;
+
+        if (turn.audioBase64) {
+          await new Promise<void>((resolve) => {
+            if (!voiceAudioRef.current) return resolve();
+            voiceAudioRef.current.src = turn.audioBase64;
+            voiceAudioRef.current.currentTime = 0;
+            voiceAudioRef.current.onended = () => resolve();
+            voiceAudioRef.current.play().catch(() => resolve());
+          });
+        } else {
+          const readingDelay = Math.min(12000, Math.max(4000, (turn.text.split(' ').length / 2.5) * 1000));
+          await new Promise((r) => setTimeout(r, readingDelay));
+        }
+      }
+
+      // 4. Conclude bulletin and resume show music
+      setActiveSpeaker(null);
+      setActiveTranscript(null);
+      isVoicePlayingRef.current = false;
+      setIsBulletinPlaying(false);
+      isBulletinPlayingRef.current = false;
+
+      if (musicAudioRef.current) {
+        if (clockStepRef.current === 'INITIAL_SWEEPER') {
+          const sweeper = await fetchRandomR2Asset('random-sweeper');
+          if (sweeper && musicAudioRef.current) {
+            setCurrentBroadcastItem({
+              type: 'sweeper',
+              title: 'STATION SWEEPER',
+              subtitle: `${currentShowRef.current.title} • 98.4 FM`,
+            });
+            musicAudioRef.current.src = sweeper.url;
+            musicAudioRef.current.play().catch(() => advanceBroadcastClock());
+          } else {
+            advanceBroadcastClock();
+          }
+        } else {
+          playSongAtCurrentIndex();
+        }
+      }
+    } catch (err) {
+      console.error('Hourly bulletin execution error:', err);
+      setIsGeneratingVoice(false);
+      setIsBulletinPlaying(false);
+      isBulletinPlayingRef.current = false;
+      setActiveSpeaker(null);
+      setActiveTranscript(null);
+      if (musicAudioRef.current && isPlaying) {
+        musicAudioRef.current.play().catch(() => {});
+      }
+    }
+  }, [initAudio, isPlaying, playSongAtCurrentIndex, fetchRandomR2Asset, advanceBroadcastClock]);
+
+  useEffect(() => {
+    triggerHourlyBulletinRef.current = triggerHourlyBulletin;
+  }, [triggerHourlyBulletin]);
 
   const selectShow = useCallback((show: Show) => {
     setCurrentShow(show);
@@ -914,6 +1070,8 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         triggerVoiceQuip,
         selectShow,
         updateShowMetadata,
+        isBulletinPlaying,
+        triggerHourlyBulletin,
       }}
     >
       {children}

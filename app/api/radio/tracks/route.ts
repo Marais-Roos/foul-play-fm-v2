@@ -35,18 +35,18 @@ export async function GET(request: NextRequest) {
       showTitle: show.title,
       playlistId: show.jellyfinPlaylistId || null,
       source: show.jellyfinPlaylistId ? 'jellyfin_playlist' : 'jellyfin_library',
-      tracks: tracks.length > 0 ? tracks : FALLBACK_TRACKS,
+      tracks: tracks.length > 0 ? tracks : [],
     });
   } catch (error) {
     console.error('Error fetching radio tracks:', error);
     return NextResponse.json(
       {
         success: false,
-        source: 'fallback',
-        tracks: FALLBACK_TRACKS,
+        source: 'empty',
+        tracks: [],
         error: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 200 } // Return 200 with fallback so player doesn't fail
+      { status: 200 }
     );
   }
 }

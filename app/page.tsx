@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
+import { Menu } from "lucide-react";
 import { AudioPlayerProvider, useAudioPlayer } from "@/components/audio-context";
 import { Sidebar } from "@/components/sidebar";
 import { AudioPlayerBar } from "@/components/player/audio-player-bar";
@@ -16,12 +18,39 @@ import { DEFAULT_SHOW_IMAGES } from "@/lib/data/station";
 
 function StationMainContent() {
   const [activeTab, setActiveTab] = useState("home");
-  const { currentShow, updateShowMetadata } = useAudioPlayer();
-  const { shows, presenters, source, isLoading } = useSanityStation();
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Sync Sanity cover artwork to currentShow when loaded
+  const { currentShow, updateShowMetadata } = useAudioPlayer();
+  const { shows, presenters } = useSanityStation();
+
+  // Restore desktop sidebar collapsed preference if saved
   useEffect(() => {
-    if (shows.length > 0 && !currentShow.coverImage) {
+    try {
+      const saved = localStorage.getItem("foulplay_sidebar_collapsed");
+      if (saved !== null) {
+        setIsSidebarCollapsed(saved === "true");
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleToggleCollapse = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("foulplay_sidebar_collapsed", String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  // Sync Sanity show metadata to currentShow when loaded
+  useEffect(() => {
+    if (shows.length > 0) {
       const match = shows.find(
         (s: any) =>
           s._id === currentShow.id ||
@@ -34,35 +63,75 @@ function StationMainContent() {
           ? urlForImage(match.coverImage)?.width(800).height(800).fit("crop").url()
           : (match.imageUrl || DEFAULT_SHOW_IMAGES[currentShow.id]);
         updateShowMetadata({
+          title: match.title || currentShow.title,
+          description: match.description || currentShow.description,
+          vibe: match.vibe || currentShow.vibe,
+          jellyfinPlaylistId: match.jellyfinPlaylistId || currentShow.jellyfinPlaylistId,
           coverImage: match.coverImage,
           imageUrl: coverImageUrl || currentShow.imageUrl,
         });
       }
     }
-  }, [shows, currentShow.id, currentShow.title, currentShow.coverImage, currentShow.imageUrl, updateShowMetadata]);
+  }, [shows, currentShow.id, currentShow.title, updateShowMetadata]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0A0A0A] text-[#F3F4F6]">
-      {/* 1. Spotify-Style Left Sidebar */}
-      <Sidebar currentTab={activeTab} onTabChange={setActiveTab} />
+      {/* 1. Spotify-Style Left Sidebar (collapsible desktop + drawer mobile) */}
+      <Sidebar
+        currentTab={activeTab}
+        onTabChange={setActiveTab}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={handleToggleCollapse}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
+      />
 
       {/* 2. Main Scrollable Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <main className="flex-1 overflow-y-auto px-8 py-6 space-y-8 pb-32">
+        {/* Mobile Top Header (only on < md screens) */}
+        <header className="h-14 bg-[#070707] border-b border-[#181818] px-4 flex items-center justify-between md:hidden shrink-0 z-30 select-none">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              aria-label="Open navigation menu"
+              className="p-1.5 -ml-1 text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-[#141414] rounded-lg transition-colors cursor-pointer"
+            >
+              <Menu size={22} />
+            </button>
+            <div
+              className="relative w-32 h-8 cursor-pointer flex items-center"
+              onClick={() => setActiveTab("home")}
+            >
+              <Image
+                src="/images/logo.png"
+                alt="Foul Play FM"
+                fill
+                sizes="128px"
+                className="object-contain object-left"
+                priority
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#CCFF00] animate-pulse" />
+              98.4 FM
+            </span>
+          </div>
+        </header>
+
+        {/* Scrollable Viewport */}
+        <main className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-6 space-y-6 md:space-y-8 pb-32 md:pb-36">
           {activeTab === "home" && (
-            <div className="space-y-8 animate-in fade-in duration-300">
+            <div className="space-y-6 md:space-y-8 animate-in fade-in duration-300">
               {/* Header: Explore Shows */}
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <h1 className="text-3xl font-bold tracking-tight text-[#F3F4F6] font-[family-name:var(--font-heading)]">
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#F3F4F6] font-[family-name:var(--font-heading)]">
                       Explore Shows
                     </h1>
-                    {source === "sanity" && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#CCFF00]/15 text-[#CCFF00] font-mono font-bold border border-[#CCFF00]/30">
-                        Sanity Live
-                      </span>
-                    )}
                   </div>
                   <button
                     onClick={() => setActiveTab("shows")}
@@ -73,7 +142,7 @@ function StationMainContent() {
                 </div>
 
                 {/* Horizontal Shows Carousel populated from Sanity */}
-                <div className="flex gap-5 overflow-x-auto pb-4 pt-1 scrollbar-none">
+                <div className="flex gap-4 sm:gap-5 overflow-x-auto pb-4 pt-1 scrollbar-none">
                   {shows.map((show, idx) => (
                     <ShowCard key={show._id || show.id || idx} show={show} index={idx} />
                   ))}
@@ -81,7 +150,7 @@ function StationMainContent() {
               </div>
 
               {/* Lower Two-Column Section: Recently Played & Browse by Vibe */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-2">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 pt-2">
                 <RecentlyPlayed />
                 <VibeGrid />
               </div>

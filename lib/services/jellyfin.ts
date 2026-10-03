@@ -17,6 +17,7 @@ export interface JellyfinTrack {
   albumArtUrl?: string;
   playedAt?: string;       // e.g. "20:55"
   startedAt?: Date | number;
+  showTitle?: string;
 }
 
 const BROWSER_USER_AGENT =
@@ -57,55 +58,9 @@ function mapJellyfinItemToTrack(item: any, jellyfinUrl: string, apiKey?: string)
 }
 
 /**
- * Satirical fallback tracks for Foul Play FM when Jellyfin is offline or starting up
+ * Clean fallback tracks definition (empty by default; no fake satirical placeholders)
  */
-export const FALLBACK_TRACKS: JellyfinTrack[] = [
-  {
-    id: 'fp-track-1',
-    title: 'Stage 6 Disco (Generator Breakdown)',
-    artist: 'Eskom Youth Choir',
-    album: 'Gauteng Blackout Vol. 4',
-    durationMs: 194000,
-    durationFormatted: '03:14',
-    streamUrl: '/api/audio/voice?file=data/voices/main_presenters/tony_tatum_sample.mp3',
-  },
-  {
-    id: 'fp-track-2',
-    title: 'Buccleuch Taxi Drag Race',
-    artist: 'Hiace Turbo Syndicate',
-    album: 'N1 Emergency Lane Anthems',
-    durationMs: 221000,
-    durationFormatted: '03:41',
-    streamUrl: '/api/audio/voice?file=data/voices/main_presenters/benny_st_pierre_sample.mp3',
-  },
-  {
-    id: 'fp-track-3',
-    title: 'Crypto Borewors & The Hadeda Scream',
-    artist: 'Dividend Dave & The Pundits',
-    album: 'Sandton Ponzi Beats',
-    durationMs: 182000,
-    durationFormatted: '03:02',
-    streamUrl: '/api/audio/voice?file=data/voices/side_characters/dividend_dave_sample.mp3',
-  },
-  {
-    id: 'fp-track-4',
-    title: 'Pothole Slalom (Vereeniging Nights)',
-    artist: 'Suspension Killer',
-    album: 'Vaal River Blues',
-    durationMs: 205000,
-    durationFormatted: '03:25',
-    streamUrl: '/api/audio/voice?file=data/voices/main_presenters/cynthia_blight_sample.mp3',
-  },
-  {
-    id: 'fp-track-5',
-    title: 'Chopper Dogfight Over Sandton City',
-    artist: 'Simon Carter & Chopper One',
-    album: 'Traffic Radar Mayhem',
-    durationMs: 215000,
-    durationFormatted: '03:35',
-    streamUrl: '/api/audio/voice?file=data/voices/side_characters/simon_carter_sample.mp3',
-  },
-];
+export const FALLBACK_TRACKS: JellyfinTrack[] = [];
 
 /**
  * Fetch all audio tracks from a specific Jellyfin Playlist by ID
