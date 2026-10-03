@@ -1,9 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
-import { Play, Pause, Volume2, VolumeX, Radio, Sparkles, Mic, Disc3, SkipForward } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Radio, Sparkles, Mic, Disc3, SkipForward, Megaphone } from "lucide-react";
 import { urlForImage } from "@/sanity/lib/image";
+import { DEFAULT_SHOW_IMAGES, calculateShowProgress } from "@/lib/data/station";
 import { useAudioPlayer } from "../audio-context";
 
 export function AudioPlayerBar() {
@@ -12,6 +13,7 @@ export function AudioPlayerBar() {
     togglePlay,
     skipTrack,
     currentTrack,
+    currentBroadcastItem,
     volume,
     setVolume,
     isMuted,
@@ -21,38 +23,44 @@ export function AudioPlayerBar() {
     activeTranscript,
     isGeneratingVoice,
     isDucking,
-    elapsedSeconds,
-    totalShowSeconds,
     triggerVoiceQuip,
   } = useAudioPlayer();
 
-  const formatTime = (secs: number) => {
-    const hours = Math.floor(secs / 3600);
-    const mins = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    if (hours > 0) {
-      return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-    }
-    return `${mins.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  };
+  // Dynamic real-time clock to drive accurate show schedule progress
+  const [now, setNow] = useState<Date>(() => new Date());
 
-  const progressPercent = Math.min(100, Math.max(0, (elapsedSeconds / totalShowSeconds) * 100));
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  // Pull Sanity cover image if present
-  const sanityImageUrl = (currentShow as any).coverImage
-    ? urlForImage((currentShow as any).coverImage)?.width(120).height(120).url()
-    : null;
+  const { startTimeStr, endTimeStr, progressPercent, isOnAir } = useMemo(() => {
+    return calculateShowProgress(currentShow, now);
+  }, [currentShow, now]);
+
+  // Robust artwork thumbnail resolution:
+  // 1. Sanity coverImage (uploaded crop)
+  // 2. Direct show imageUrl property
+  // 3. Official station CDN image fallback by show id/slug
+  const thumbnailSrc =
+    (currentShow.coverImage ? urlForImage(currentShow.coverImage)?.width(160).height(160).fit("crop").url() : null) ||
+    currentShow.imageUrl ||
+    DEFAULT_SHOW_IMAGES[currentShow.id] ||
+    null;
 
   return (
     <footer className="h-22 bg-[#090909] border-t border-[#1C1C1E] px-6 flex items-center justify-between z-50 select-none">
       {/* 1. Left: Current Show Info */}
       <div className="flex items-center gap-4 min-w-[280px]">
         <div className="relative w-14 h-14 rounded-lg overflow-hidden bg-[#181818] shrink-0 border border-[#27272A] flex items-center justify-center">
-          {sanityImageUrl ? (
+          {thumbnailSrc ? (
             <Image
-              src={sanityImageUrl}
+              src={thumbnailSrc}
               alt={currentShow.title}
               fill
+              sizes="56px"
               className="object-cover"
             />
           ) : (
@@ -65,7 +73,7 @@ export function AudioPlayerBar() {
           )}
 
           {isPlaying && (
-            <div className="absolute top-1 right-1 flex gap-0.5 items-end h-3 bg-black/60 px-1 py-0.5 rounded">
+            <div className="absolute top-1 right-1 flex gap-0.5 items-end h-3 bg-black/70 px-1 py-0.5 rounded shadow">
               <span className="w-0.5 bg-[#CCFF00] h-full animate-[bounce_0.8s_infinite]" />
               <span className="w-0.5 bg-[#CCFF00] h-2/3 animate-[bounce_0.6s_infinite]" />
               <span className="w-0.5 bg-[#CCFF00] h-4/5 animate-[bounce_1s_infinite]" />
@@ -78,13 +86,36 @@ export function AudioPlayerBar() {
             <h4 className="text-sm font-semibold text-[#F3F4F6] truncate font-[family-name:var(--font-heading)]">
               {currentShow.title}
             </h4>
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20">
-              <Radio size={10} className="animate-pulse" />
-              Live
-            </span>
+            {isOnAir ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20">
+                <Radio size={10} className="animate-pulse" />
+                Live
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-zinc-800 text-zinc-400 border border-zinc-700">
+                Replay
+              </span>
+            )}
           </div>
 
-          {currentTrack ? (
+          {currentBroadcastItem && currentBroadcastItem.type === "sweeper" ? (
+            <p className="text-xs text-[#CCFF00] font-semibold truncate mt-0.5 flex items-center gap-1.5 animate-pulse">
+              <Sparkles size={11} />
+              <span>STATION SWEEPER</span>
+              <span className="text-[#9CA3AF] font-normal">• {currentBroadcastItem.subtitle || "98.4 FM"}</span>
+            </p>
+          ) : currentBroadcastItem && currentBroadcastItem.type === "ad" ? (
+            <p className="text-xs text-[#F59E0B] font-semibold truncate mt-0.5 flex items-center gap-1.5 animate-pulse">
+              <Megaphone size={11} />
+              <span>SPONSOR MESSAGE</span>
+              <span className="text-[#9CA3AF] font-normal">• {currentBroadcastItem.subtitle || "Foul Play Commercial"}</span>
+            </p>
+          ) : currentBroadcastItem && currentBroadcastItem.type === "banter" ? (
+            <p className="text-xs text-[#CCFF00] font-semibold truncate mt-0.5 flex items-center gap-1.5 animate-pulse">
+              <Mic size={11} />
+              <span>{activeSpeaker || currentShow.hostNames} ON AIR</span>
+            </p>
+          ) : currentTrack ? (
             <p className="text-xs text-[#E5E7EB] font-medium truncate mt-0.5">
               <span className="text-[#CCFF00]">♫</span> {currentTrack.title}{" "}
               <span className="text-[#9CA3AF] font-normal">• {currentTrack.artist}</span>
@@ -108,24 +139,37 @@ export function AudioPlayerBar() {
       <div className="relative flex-1 max-w-2xl px-6 flex flex-col items-center gap-1.5">
         {/* Floating Subtitle Banner */}
         {activeTranscript && (
-          <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-[#121214] border border-[#CCFF00]/50 text-[#F3F4F6] px-4 py-1.5 rounded-full text-xs font-medium flex items-center gap-2.5 shadow-2xl backdrop-blur-md z-50 whitespace-nowrap animate-in fade-in slide-in-from-bottom-2">
-            <span className="w-2 h-2 rounded-full bg-[#CCFF00] animate-ping shrink-0" />
-            <span className="font-bold text-[#CCFF00] shrink-0">{activeSpeaker}:</span>
-            <span className="text-[#F3F4F6] italic truncate max-w-[420px]">"{activeTranscript}"</span>
+          <div className="absolute bottom-[calc(100%+14px)] left-1/2 -translate-x-1/2 bg-[#121214]/95 border border-[#CCFF00]/50 text-[#F3F4F6] px-4 py-2.5 rounded-2xl text-xs font-medium flex flex-col gap-1 shadow-2xl backdrop-blur-md z-50 max-w-[560px] w-max animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#CCFF00] animate-ping shrink-0" />
+              <span className="font-bold text-[#CCFF00] shrink-0 uppercase tracking-wider text-[11px]">
+                {activeSpeaker} on-air:
+              </span>
+            </div>
+            <div className="text-[#E4E4E7] text-xs font-sans whitespace-pre-line leading-relaxed max-h-[100px] overflow-y-auto">
+              {activeTranscript}
+            </div>
           </div>
         )}
 
-        <div className="w-full flex items-center gap-3 text-xs text-[#9CA3AF] font-mono">
-          <span className="w-12 text-right">{formatTime(elapsedSeconds)}</span>
+        <div className="w-full flex items-center gap-3 text-xs font-mono">
+          <span className="w-12 text-right font-semibold text-[#CCFF00]">
+            {startTimeStr}
+          </span>
           
-          <div className="relative flex-1 h-1.5 bg-[#27272A] rounded-full overflow-hidden cursor-pointer group">
+          <div
+            className="relative flex-1 h-2 bg-[#27272A] rounded-full overflow-hidden cursor-pointer group"
+            title={`${Math.round(progressPercent)}% through show (${startTimeStr} – ${endTimeStr})`}
+          >
             <div
-              className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-[#7C3AED] via-[#9055FF] to-[#CCFF00] rounded-full transition-all"
+              className="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-[#7C3AED] via-[#9055FF] to-[#CCFF00] rounded-full transition-all duration-1000 ease-linear shadow-[0_0_8px_rgba(204,255,0,0.35)]"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
 
-          <span className="w-12 text-left">03:00</span>
+          <span className="w-12 text-left font-semibold text-[#9CA3AF]">
+            {endTimeStr}
+          </span>
         </div>
       </div>
 

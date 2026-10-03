@@ -39,6 +39,8 @@ export interface Show {
   shortDescription: string;
   detailedDescription: string;
   jellyfinPlaylistId?: string;
+  coverImage?: any;
+  imageUrl?: string;
 }
 
 export interface DJ {

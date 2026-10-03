@@ -4,18 +4,21 @@ import React from "react";
 import Image from "next/image";
 import { Play, Disc3 } from "lucide-react";
 import { urlForImage } from "@/sanity/lib/image";
+import { DEFAULT_SHOW_IMAGES } from "@/lib/data/station";
 import { useAudioPlayer } from "./audio-context";
 
 interface ShowCardProps {
   show: {
     _id?: string;
     id?: string;
+    slug?: string;
     title: string;
     timeSlot: any;
     hosts?: any[];
     hostIds?: string[];
     hostNames?: string;
     coverImage?: any;
+    imageUrl?: string;
     vibe?: string;
     description?: string;
   };
@@ -52,6 +55,12 @@ export function ShowCard({ show, index }: ShowCardProps) {
   const gradientClass = GRADIENT_PALETTES[index % GRADIENT_PALETTES.length];
 
   const handleCardClick = () => {
+    const finalImageUrl =
+      sanityImageUrl ||
+      show.imageUrl ||
+      DEFAULT_SHOW_IMAGES[showId] ||
+      (show.slug ? DEFAULT_SHOW_IMAGES[show.slug] : undefined);
+
     selectShow({
       id: showId,
       title: show.title,
@@ -68,6 +77,8 @@ export function ShowCard({ show, index }: ShowCardProps) {
       vibe: show.vibe || "",
       shortDescription: show.description || "",
       detailedDescription: show.description || "",
+      coverImage: show.coverImage,
+      imageUrl: finalImageUrl,
     });
 
     const firstHostId = show.hostIds?.[0] || (show.hosts?.[0]?.slug) || undefined;

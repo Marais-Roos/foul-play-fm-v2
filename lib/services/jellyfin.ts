@@ -15,6 +15,8 @@ export interface JellyfinTrack {
   durationFormatted: string;
   streamUrl: string;
   albumArtUrl?: string;
+  playedAt?: string;       // e.g. "20:55"
+  startedAt?: Date | number;
 }
 
 const BROWSER_USER_AGENT =
@@ -212,22 +214,33 @@ export async function getJellyfinTracks(genreOrTag?: string): Promise<JellyfinTr
 }
 
 /**
+ * Fisher-Yates shuffle algorithm for true unbiased playlist randomization.
+ */
+export function shuffleTracks<T>(items: T[]): T[] {
+  const array = [...items];
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+/**
  * Get active track rotation for a show:
  * 1. Checks if the show has a Jellyfin Playlist ID configured (from Sanity or Station Bible).
- * 2. If playlist has tracks, shuffles them.
+ * 2. If playlist has tracks, shuffles them with Fisher-Yates.
  * 3. If no playlist ID or empty, falls back to genre query or satirical track list.
  */
 export async function getShowTracks(show: Show): Promise<JellyfinTrack[]> {
   if (show.jellyfinPlaylistId) {
     const playlistTracks = await getPlaylistTracks(show.jellyfinPlaylistId);
     if (playlistTracks.length > 0) {
-      // Return a shuffled copy
-      return [...playlistTracks].sort(() => Math.random() - 0.5);
+      return shuffleTracks(playlistTracks);
     }
   }
 
   // Fallback to genre query matching show vibe
   const genre = show.musicGenres?.[0] || show.vibe;
   const tracks = await getJellyfinTracks(genre);
-  return tracks.length > 0 ? tracks : FALLBACK_TRACKS;
+  return tracks.length > 0 ? shuffleTracks(tracks) : FALLBACK_TRACKS;
 }

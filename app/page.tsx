@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { AudioPlayerProvider, useAudioPlayer } from "@/components/audio-context";
 import { Sidebar } from "@/components/sidebar";
 import { AudioPlayerBar } from "@/components/player/audio-player-bar";
@@ -11,11 +11,35 @@ import { ShowsView } from "@/components/radio/shows-view";
 import { PresentersView } from "@/components/radio/presenters-view";
 import { LiveView } from "@/components/radio/live-view";
 import { useSanityStation } from "@/lib/hooks/useSanityStation";
+import { urlForImage } from "@/sanity/lib/image";
+import { DEFAULT_SHOW_IMAGES } from "@/lib/data/station";
 
 function StationMainContent() {
   const [activeTab, setActiveTab] = useState("home");
-  const { currentShow } = useAudioPlayer();
+  const { currentShow, updateShowMetadata } = useAudioPlayer();
   const { shows, presenters, source, isLoading } = useSanityStation();
+
+  // Sync Sanity cover artwork to currentShow when loaded
+  useEffect(() => {
+    if (shows.length > 0 && !currentShow.coverImage) {
+      const match = shows.find(
+        (s: any) =>
+          s._id === currentShow.id ||
+          s.id === currentShow.id ||
+          s.slug === currentShow.id ||
+          s.title === currentShow.title
+      );
+      if (match) {
+        const coverImageUrl = match.coverImage
+          ? urlForImage(match.coverImage)?.width(800).height(800).fit("crop").url()
+          : (match.imageUrl || DEFAULT_SHOW_IMAGES[currentShow.id]);
+        updateShowMetadata({
+          coverImage: match.coverImage,
+          imageUrl: coverImageUrl || currentShow.imageUrl,
+        });
+      }
+    }
+  }, [shows, currentShow.id, currentShow.title, currentShow.coverImage, currentShow.imageUrl, updateShowMetadata]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0A0A0A] text-[#F3F4F6]">

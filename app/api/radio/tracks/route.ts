@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentShow, getShowById } from '@/lib/data/station';
-import { getShowTracks, getPlaylistTracks, getJellyfinTracks, FALLBACK_TRACKS } from '@/lib/services/jellyfin';
+import { getShowTracks, getPlaylistTracks, shuffleTracks, FALLBACK_TRACKS } from '@/lib/services/jellyfin';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,14 +11,14 @@ export async function GET(request: NextRequest) {
     const showId = searchParams.get('showId');
     const playlistId = searchParams.get('playlistId');
 
-    // 1. Direct playlist query if requested
+    // 1. Direct playlist query if requested (always shuffle for fresh radio rotation)
     if (playlistId) {
       const playlistTracks = await getPlaylistTracks(playlistId);
       if (playlistTracks.length > 0) {
         return NextResponse.json({
           success: true,
           source: 'jellyfin_playlist',
-          tracks: playlistTracks,
+          tracks: shuffleTracks(playlistTracks),
         });
       }
     }
