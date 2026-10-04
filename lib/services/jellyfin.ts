@@ -20,17 +20,19 @@ export interface JellyfinTrack {
   showTitle?: string;
 }
 
-const BROWSER_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-
 function getJellyfinHeaders(apiKey?: string): Record<string, string> {
   const headers: Record<string, string> = {
-    'User-Agent': BROWSER_USER_AGENT,
+    'User-Agent': 'FoulPlayFM-Server/2.0',
     Accept: 'application/json',
   };
   if (apiKey) {
     headers['Authorization'] = `MediaBrowser Token="${apiKey}"`;
     headers['X-Emby-Token'] = apiKey;
+  }
+  // Cloudflare WAF Bypass secret
+  const bypassSecret = process.env.JELLYFIN_CF_BYPASS_SECRET;
+  if (bypassSecret) {
+    headers['x-cf-bypass'] = bypassSecret;
   }
   return headers;
 }
