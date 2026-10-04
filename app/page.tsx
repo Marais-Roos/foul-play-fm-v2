@@ -22,7 +22,7 @@ function StationMainContent() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const { currentShow, updateShowMetadata } = useAudioPlayer();
-  const { shows, presenters } = useSanityStation();
+  const { shows, presenters, sideCharacters } = useSanityStation();
 
   // Restore desktop sidebar collapsed preference if saved
   useEffect(() => {
@@ -116,7 +116,7 @@ function StationMainContent() {
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 font-mono">
               <span className="w-1.5 h-1.5 rounded-full bg-[#CCFF00] animate-pulse" />
-              98.4 FM
+              LIVE STREAM
             </span>
           </div>
         </header>
@@ -158,7 +158,7 @@ function StationMainContent() {
           )}
 
           {activeTab === "shows" && <ShowsView shows={shows} />}
-          {activeTab === "presenters" && <PresentersView presenters={presenters} />}
+          {activeTab === "presenters" && <PresentersView presenters={presenters} sideCharacters={sideCharacters} />}
           {activeTab === "live" && <LiveView />}
         </main>
       </div>

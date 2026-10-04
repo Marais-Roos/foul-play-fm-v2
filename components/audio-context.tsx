@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { Show, DJ } from "@/lib/types/station";
-import { stationBible, getCurrentShow } from "@/lib/data/station";
+import { stationBible, getCurrentShow, getDJById, getSideCharacterById } from "@/lib/data/station";
 import { JellyfinTrack } from "@/lib/services/jellyfin";
 
 export interface VoiceQuipOptions {
@@ -801,20 +801,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
       // Fallback
       if (!audioSrc) {
-        let targetFile = "data/voices/main_presenters/tony_tatum_sample.mp3";
-        speakerName = "Tony \"The Titan\" Tatum";
         const targetId = characterId || currentShow.hostIds[0];
-        if (targetId) {
-          const dj = stationBible.djs.find((d) => d.id === targetId);
-          const sc = stationBible.sideCharacters.find((s) => s.id === targetId);
-          if (dj?.voiceSampleFile) {
-            targetFile = dj.voiceSampleFile;
-            speakerName = dj.name;
-          } else if (sc?.voiceSampleFile) {
-            targetFile = sc.voiceSampleFile;
-            speakerName = sc.name;
-          }
-        }
+        const dj = targetId ? getDJById(targetId) : undefined;
+        const sc = targetId ? getSideCharacterById(targetId) : undefined;
+        let targetFile = dj?.voiceSampleFile || sc?.voiceSampleFile || "data/voices/main_presenters/chip_walton_sample.mp3";
+        speakerName = dj?.name || sc?.name || currentShow.hostNames.split("&")[0].trim() || "Foul Play FM Host";
         audioSrc = `/api/audio/voice?file=${encodeURIComponent(targetFile)}`;
         transcriptText = "Broadcasting live on Foul Play FM!";
       }
@@ -942,7 +933,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         setCurrentBroadcastItem({
           type: 'sweeper',
           title: 'NEWS & TRAFFIC INTRO',
-          subtitle: '98.4 FM Bulletin',
+          subtitle: 'Foul Play FM Bulletin',
         });
         await new Promise<void>((resolve) => {
           if (!musicAudioRef.current) return resolve();
@@ -964,7 +955,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         setCurrentBroadcastItem({
           type: 'banter',
           title: `${turn.anchorName} • ${turn.segment}`,
-          subtitle: '98.4 FM Live Bulletin',
+          subtitle: 'Live Bulletin',
         });
         isVoicePlayingRef.current = true;
 
@@ -996,7 +987,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
             setCurrentBroadcastItem({
               type: 'sweeper',
               title: 'STATION SWEEPER',
-              subtitle: `${currentShowRef.current.title} • 98.4 FM`,
+              subtitle: `${currentShowRef.current.title} • Foul Play FM`,
             });
             musicAudioRef.current.src = sweeper.url;
             musicAudioRef.current.play().catch(() => advanceBroadcastClock());
@@ -1039,7 +1030,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     setActiveTranscript(null);
   }, []);
 
-  const currentDJ = stationBible.djs.find((d) => currentShow.hostIds.includes(d.id)) || null;
+  const currentDJ = (currentShow.hostIds && currentShow.hostIds[0] ? getDJById(currentShow.hostIds[0]) : null) || null;
 
   return (
     <AudioPlayerContext.Provider

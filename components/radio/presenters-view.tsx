@@ -9,12 +9,13 @@ import { Volume2, User, Mic } from "lucide-react";
 
 interface PresentersViewProps {
   presenters?: any[];
+  sideCharacters?: any[];
 }
 
-export function PresentersView({ presenters }: PresentersViewProps) {
+export function PresentersView({ presenters, sideCharacters: propSideCharacters }: PresentersViewProps) {
   const { triggerVoiceQuip, activeSpeaker, isDucking, isGeneratingVoice } = useAudioPlayer();
   const displayPresenters = presenters && presenters.length > 0 ? presenters : stationBible.djs;
-  const sideCharacters = stationBible.sideCharacters;
+  const sideCharacters = propSideCharacters && propSideCharacters.length > 0 ? propSideCharacters : stationBible.sideCharacters;
 
   return (
     <div className="space-y-12 animate-in fade-in duration-300">

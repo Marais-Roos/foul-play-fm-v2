@@ -1,8 +1,8 @@
 import { defineField, defineType } from 'sanity';
 
 export default defineType({
-  name: 'presenter',
-  title: 'Presenter',
+  name: 'sideCharacter',
+  title: 'Side Character',
   type: 'document',
   fields: [
     defineField({
@@ -20,6 +20,18 @@ export default defineType({
       },
     }),
     defineField({
+      name: 'role',
+      title: 'Station Role',
+      description: 'e.g. Traffic Desk Anchor, Sports Pundit, Investigative Journalist, Ward Councillor',
+      type: 'string',
+    }),
+    defineField({
+      name: 'parodyOf',
+      title: 'Parody Of (Archetype)',
+      description: 'Reference character or real-life inspiration (e.g. Tom Cruise, Roy Keane, Tucker Carlson)',
+      type: 'string',
+    }),
+    defineField({
       name: 'image',
       title: 'Profile Image',
       type: 'image',
@@ -29,14 +41,14 @@ export default defineType({
     }),
     defineField({
       name: 'bio',
-      title: 'Biography (Public)',
+      title: 'Biography',
       type: 'text',
       rows: 3,
     }),
     defineField({
       name: 'voicePrompt',
       title: 'AI Personality Prompt',
-      description: 'Instructions for the AI (e.g., "Aggressive, rude, uses slang")',
+      description: 'Instructions for AI dialogue generation and delivery tone.',
       type: 'text',
       rows: 3,
     }),
@@ -49,22 +61,17 @@ export default defineType({
     defineField({
       name: 'voiceSample',
       title: 'Voice Sample',
-      description: 'Upload the reference audio for voice cloning here.',
+      description: 'Reference audio file for voice cloning.',
       type: 'file',
       options: {
         accept: 'audio/mpeg,audio/wav',
       },
     }),
-    defineField({
-      name: 'parodyOf',
-      title: 'Parody Of (Archetype)',
-      description: 'Reference character or real-life inspiration (e.g. John Cena, Paris Hilton, Alex Jones)',
-      type: 'string',
-    }),
   ],
   preview: {
     select: {
       title: 'name',
+      subtitle: 'role',
       media: 'image',
     },
   },

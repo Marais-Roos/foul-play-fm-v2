@@ -42,6 +42,12 @@ export default defineType({
       type: 'text',
       rows: 2,
     }),
+    defineField({
+      name: 'fishAudioVoiceId',
+      title: 'Fish Audio Voice ID',
+      description: 'Cloned voice model ID from Fish Audio.',
+      type: 'string',
+    }),
   ],
   preview: {
     select: {

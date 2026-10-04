@@ -1,7 +1,7 @@
 import rawStationBible from './station-bible.json' with { type: 'json' };
 import { StationBible, Show, DJ, SideCharacter, CallerPersona } from '../types/station';
 import { client, isSanityConfigured } from '@/sanity/lib/client';
-import { SHOWS_QUERY, PRESENTERS_QUERY, CALLERS_QUERY } from '@/sanity/lib/queries';
+import { SHOWS_QUERY, PRESENTERS_QUERY, CALLERS_QUERY, SIDE_CHARACTERS_QUERY } from '@/sanity/lib/queries';
 
 export const DEFAULT_SHOW_IMAGES: Record<string, string> = {
   'truckers-tales-tacky-talk': 'https://cdn.sanity.io/images/fkbibl7o/production/90be52f1115123dca27e7ea6835fb67f31b3f1ab-1024x1024.png',
@@ -23,12 +23,13 @@ export const stationBible: StationBible = {
   })),
 } as StationBible;
 
-// In-memory cache for Sanity queries to avoid rate limits
+// Fast cache for Sanity queries (5 seconds) so updates in Sanity Studio reflect immediately
 let cachedSanityShows: Show[] | null = null;
 let cachedSanityDJs: DJ[] | null = null;
+let cachedSanitySideCharacters: SideCharacter[] | null = null;
 let cachedSanityCallers: CallerPersona[] | null = null;
 let lastCacheTime = 0;
-const CACHE_TTL_MS = 30000; // 30 seconds
+const CACHE_TTL_MS = 5000; // 5 seconds for near-instant updates
 
 /**
  * Fetch shows dynamically from Sanity CMS with station bible fallback
@@ -49,6 +50,33 @@ export async function fetchSanityShows(): Promise<Show[]> {
         const hostIds = s.hosts?.map((h: any) => h.slug || h._id) || [];
         const hostNames = s.hosts?.map((h: any) => h.name).join(' & ') || 'Live Host';
         const localShow = stationBible.shows.find(ls => ls.id === (s.slug || s._id) || ls.title === s.title);
+        
+        const sideCharacters: SideCharacter[] = (s.sideCharacters || []).map((sc: any) => ({
+          id: sc.slug || sc._id,
+          name: sc.name,
+          parodyOf: sc.parodyOf || '',
+          role: sc.role || 'Guest',
+          description: sc.bio || '',
+          aiPersonalityPrompt: sc.voicePrompt || '',
+          voiceDesignPrompt: '',
+          recommendedPreviewText: '',
+          voiceSampleFile: '',
+          fishAudioVoiceId: sc.fishAudioVoiceId || null,
+        }));
+
+        const callers: CallerPersona[] = (s.callers || []).map((c: any) => ({
+          id: c.voiceTag || c._id,
+          voiceTag: c.voiceTag,
+          archetype: c.archetype,
+          targetOfSatire: c.targetOfSatire || '',
+          aiContextStrategy: c.contextStrategy || '',
+          description: c.sampleQuote || '',
+          voiceDesignPrompt: '',
+          recommendedPreviewText: c.sampleQuote || '',
+          fishAudioVoiceId: c.fishAudioVoiceId || null,
+          voicePrompt: c.voicePrompt,
+        }));
+
         return {
           id: s.slug || s._id,
           title: s.title,
@@ -69,6 +97,8 @@ export async function fetchSanityShows(): Promise<Show[]> {
           hostNames: hostNames || (localShow?.hostNames || 'Live Host'),
           imageUrl: s.coverImage ? undefined : (localShow?.imageUrl || DEFAULT_SHOW_IMAGES[s.slug || s._id]),
           coverImage: s.coverImage,
+          sideCharacters: sideCharacters.length > 0 ? sideCharacters : undefined,
+          callers: callers.length > 0 ? callers : undefined,
         };
       });
       cachedSanityShows = mapped;
@@ -79,6 +109,58 @@ export async function fetchSanityShows(): Promise<Show[]> {
     console.warn('Could not query Sanity shows, using fallback station bible:', err);
   }
   return stationBible.shows;
+}
+
+/**
+ * Resilient matcher between Sanity presenter slugs/names and local station bible entries.
+ * Normalizes nicknames (e.g. Chip "The Fearmonger" Walton -> Chip Walton) and tokenized slugs.
+ */
+export function findMatchingLocalDJ(identifier?: string, name?: string): DJ | undefined {
+  if (!identifier && !name) return undefined;
+  
+  const rawId = (identifier || '').toLowerCase().trim();
+  const rawName = (name || '').toLowerCase().trim();
+  const cleanId = rawId.replace(/[^a-z0-9]/g, '');
+  const cleanName = rawName.replace(/[^a-z0-9]/g, '');
+
+  for (const dj of stationBible.djs) {
+    const djId = dj.id.toLowerCase();
+    const djName = dj.name.toLowerCase();
+    const djCleanId = djId.replace(/[^a-z0-9]/g, '');
+    const djCleanName = djName.replace(/[^a-z0-9]/g, '');
+
+    // Exact matches
+    if (dj.id === identifier || djId === rawId || dj.name === name || djName === rawName) {
+      return dj;
+    }
+
+    // Stripped moniker match e.g. "Chip \"The Fearmonger\" Walton" -> "Chip Walton"
+    const strippedDjName = djName.replace(/["'“].*?["'”]/g, '').replace(/\s+/g, ' ').trim();
+    if (strippedDjName === rawName) {
+      return dj;
+    }
+
+    // Token match: check if all words in identifier or name are present in dj
+    const idTokens = rawId.split(/[-_\s]+/).filter(Boolean);
+    if (idTokens.length >= 2 && idTokens.every(tok => djId.includes(tok))) {
+      return dj;
+    }
+
+    const nameTokens = rawName.replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+    if (nameTokens.length >= 2 && nameTokens.every(tok => djName.includes(tok))) {
+      return dj;
+    }
+
+    // Substring fallback
+    if (cleanId && (djCleanId.includes(cleanId) || cleanId.includes(djCleanId))) {
+      return dj;
+    }
+    if (cleanName && (djCleanName.includes(cleanName) || cleanName.includes(djCleanName))) {
+      return dj;
+    }
+  }
+
+  return undefined;
 }
 
 /**
@@ -95,7 +177,7 @@ export async function fetchSanityPresenters(): Promise<DJ[]> {
     const rawPresenters = await client.fetch(PRESENTERS_QUERY);
     if (Array.isArray(rawPresenters) && rawPresenters.length > 0) {
       const mapped: DJ[] = rawPresenters.map((p: any) => {
-        const localDj = stationBible.djs.find(d => d.id === (p.slug || p._id) || d.name === p.name);
+        const localDj = findMatchingLocalDJ(p.slug || p._id, p.name);
         return {
           id: p.slug || p._id,
           name: p.name,
@@ -103,7 +185,7 @@ export async function fetchSanityPresenters(): Promise<DJ[]> {
           description: p.bio || localDj?.description || '',
           personality: p.voicePrompt || localDj?.personality || '',
           voiceSampleFile: localDj?.voiceSampleFile || '',
-          fishAudioVoiceId: localDj?.fishAudioVoiceId || null,
+          fishAudioVoiceId: p.fishAudioVoiceId || localDj?.fishAudioVoiceId || null,
           voicePrompt: p.voicePrompt,
           bio: p.bio,
         };
@@ -116,6 +198,46 @@ export async function fetchSanityPresenters(): Promise<DJ[]> {
     console.warn('Could not query Sanity presenters, using fallback station bible:', err);
   }
   return stationBible.djs;
+}
+
+/**
+ * Fetch side characters dynamically from Sanity CMS with station bible fallback
+ */
+export async function fetchSanitySideCharacters(): Promise<SideCharacter[]> {
+  const now = Date.now();
+  if (cachedSanitySideCharacters && now - lastCacheTime < CACHE_TTL_MS) {
+    return cachedSanitySideCharacters;
+  }
+  if (!isSanityConfigured) return stationBible.sideCharacters;
+
+  try {
+    const rawSideCharacters = await client.fetch(SIDE_CHARACTERS_QUERY);
+    if (Array.isArray(rawSideCharacters) && rawSideCharacters.length > 0) {
+      const mapped: SideCharacter[] = rawSideCharacters.map((sc: any) => {
+        const localSc = stationBible.sideCharacters.find(
+          s => s.id === (sc.slug || sc._id) || s.name.toLowerCase() === (sc.name || '').toLowerCase()
+        );
+        return {
+          id: sc.slug || sc._id,
+          name: sc.name,
+          parodyOf: sc.parodyOf || localSc?.parodyOf || '',
+          role: sc.role || localSc?.role || 'Guest',
+          description: sc.bio || localSc?.description || '',
+          aiPersonalityPrompt: sc.voicePrompt || localSc?.aiPersonalityPrompt || '',
+          voiceDesignPrompt: localSc?.voiceDesignPrompt || '',
+          recommendedPreviewText: localSc?.recommendedPreviewText || '',
+          voiceSampleFile: localSc?.voiceSampleFile || '',
+          fishAudioVoiceId: sc.fishAudioVoiceId || localSc?.fishAudioVoiceId || null,
+        };
+      });
+      cachedSanitySideCharacters = mapped;
+      lastCacheTime = now;
+      return mapped;
+    }
+  } catch (err) {
+    console.warn('Could not query Sanity side characters, using fallback station bible:', err);
+  }
+  return stationBible.sideCharacters;
 }
 
 /**
@@ -142,7 +264,7 @@ export async function fetchSanityCallers(): Promise<CallerPersona[]> {
           description: localCaller?.description || c.sampleQuote || '',
           voiceDesignPrompt: localCaller?.voiceDesignPrompt || '',
           recommendedPreviewText: c.sampleQuote || localCaller?.recommendedPreviewText || '',
-          fishAudioVoiceId: localCaller?.fishAudioVoiceId || null,
+          fishAudioVoiceId: c.fishAudioVoiceId || localCaller?.fishAudioVoiceId || null,
           voicePrompt: c.voicePrompt,
         };
       });
@@ -157,11 +279,13 @@ export async function fetchSanityCallers(): Promise<CallerPersona[]> {
 }
 
 /**
- * Returns the currently scheduled show based on local time (or provided date).
+ * Returns the currently scheduled show based on local time (or provided date),
+ * prioritizing live data from Sanity CMS over local station bible.
  */
 export function getCurrentShow(date: Date = new Date()): Show {
+  const pool = cachedSanityShows && cachedSanityShows.length > 0 ? cachedSanityShows : stationBible.shows;
   const currentHour = date.getHours();
-  const show = stationBible.shows.find(s => {
+  const show = pool.find(s => {
     if (s.timeSlot.startHour < s.timeSlot.endHour) {
       return currentHour >= s.timeSlot.startHour && currentHour < s.timeSlot.endHour;
     } else {
@@ -170,7 +294,7 @@ export function getCurrentShow(date: Date = new Date()): Show {
     }
   });
 
-  const selected = show || stationBible.shows[0];
+  const selected = show || pool[0];
   return {
     ...selected,
     imageUrl: selected.imageUrl || DEFAULT_SHOW_IMAGES[selected.id],
@@ -178,10 +302,11 @@ export function getCurrentShow(date: Date = new Date()): Show {
 }
 
 /**
- * Get show by ID
+ * Get show by ID, prioritizing live Sanity CMS data.
  */
 export function getShowById(id: string): Show | undefined {
-  const show = stationBible.shows.find(s => s.id === id);
+  const pool = cachedSanityShows && cachedSanityShows.length > 0 ? cachedSanityShows : stationBible.shows;
+  const show = pool.find(s => s.id === id || s.id.includes(id) || id.includes(s.id));
   if (!show) return undefined;
   return {
     ...show,
@@ -269,16 +394,22 @@ export function calculateShowProgress(show: Show, now: Date = new Date()): ShowP
 }
 
 /**
- * Get DJ by ID or name slug
+ * Get DJ by ID or name slug, prioritizing live Sanity CMS presenters
  */
 export function getDJById(id: string): DJ | undefined {
   if (!id) return undefined;
   const clean = id.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return stationBible.djs.find(d => {
-    const dClean = d.id.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const nameClean = d.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    return d.id === id || dClean === clean || dClean.includes(clean) || clean.includes(dClean) || nameClean.includes(clean);
-  });
+
+  if (cachedSanityDJs && cachedSanityDJs.length > 0) {
+    const found = cachedSanityDJs.find(d => {
+      const dClean = d.id.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const nameClean = d.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return d.id === id || dClean === clean || dClean.includes(clean) || clean.includes(dClean) || nameClean.includes(clean);
+    });
+    if (found) return found;
+  }
+
+  return findMatchingLocalDJ(id);
 }
 
 /**
@@ -287,7 +418,10 @@ export function getDJById(id: string): DJ | undefined {
 export function getSideCharacterById(id: string): SideCharacter | undefined {
   if (!id) return undefined;
   const clean = id.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return stationBible.sideCharacters.find(sc => {
+  const pool = cachedSanitySideCharacters && cachedSanitySideCharacters.length > 0
+    ? cachedSanitySideCharacters
+    : stationBible.sideCharacters;
+  return pool.find(sc => {
     const scClean = sc.id.toLowerCase().replace(/[^a-z0-9]/g, '');
     const nameClean = sc.name.toLowerCase().replace(/[^a-z0-9]/g, '');
     return sc.id === id || scClean === clean || scClean.includes(clean) || clean.includes(scClean) || nameClean.includes(clean);
@@ -295,12 +429,15 @@ export function getSideCharacterById(id: string): SideCharacter | undefined {
 }
 
 /**
- * Get caller persona by voice tag or ID
+ * Get caller persona by voice tag or ID, prioritizing Sanity CMS callers
  */
 export function getCallerByVoiceTag(tag: string): CallerPersona | undefined {
   if (!tag) return undefined;
   const clean = tag.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return stationBible.callers.find(c => {
+  const pool = cachedSanityCallers && cachedSanityCallers.length > 0
+    ? cachedSanityCallers
+    : stationBible.callers;
+  return pool.find(c => {
     const cClean = c.id.toLowerCase().replace(/[^a-z0-9]/g, '');
     const tagClean = c.voiceTag.toLowerCase().replace(/[^a-z0-9]/g, '');
     return c.voiceTag === tag || c.id === tag || cClean === clean || tagClean === clean;
@@ -308,9 +445,12 @@ export function getCallerByVoiceTag(tag: string): CallerPersona | undefined {
 }
 
 /**
- * Get random caller persona for show generation
+ * Get random caller persona for show generation, prioritizing Sanity CMS callers
  */
 export function getRandomCaller(): CallerPersona {
-  const randomIndex = Math.floor(Math.random() * stationBible.callers.length);
-  return stationBible.callers[randomIndex];
+  const pool = cachedSanityCallers && cachedSanityCallers.length > 0
+    ? cachedSanityCallers
+    : stationBible.callers;
+  const randomIndex = Math.floor(Math.random() * pool.length);
+  return pool[randomIndex];
 }

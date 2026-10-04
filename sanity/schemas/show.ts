@@ -33,6 +33,20 @@ export default defineType({
       of: [{ type: 'reference', to: { type: 'presenter' } }],
     }),
     defineField({
+      name: 'sideCharacters',
+      title: 'Side Characters (Guests / Correspondents)',
+      description: 'Select side characters and recurring guests featured in this show.',
+      type: 'array',
+      of: [{ type: 'reference', to: { type: 'sideCharacter' } }],
+    }),
+    defineField({
+      name: 'callers',
+      title: 'Allowed Caller Personas',
+      description: 'Select caller archetypes permitted to call into this show.',
+      type: 'array',
+      of: [{ type: 'reference', to: { type: 'caller' } }],
+    }),
+    defineField({
       name: 'description',
       title: 'Description',
       type: 'text',

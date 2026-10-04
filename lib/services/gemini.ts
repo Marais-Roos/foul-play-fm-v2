@@ -43,7 +43,13 @@ async function callGemini(systemInstruction: string, userPrompt: string): Promis
       thinkingConfig: {
         thinkingBudget: 0,
       },
-    }
+    },
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+    ],
   };
 
   const res = await fetch(endpoint, {
@@ -385,13 +391,15 @@ Target duration: 25-35 seconds of fast-paced broadcast dialogue. Do NOT include 
 `;
 
   const userPrompt = `
-Give an on-air traffic update from your studio traffic desk analyzing live telemetry screens and cameras across Gauteng.
-Focus strictly on the primary highway arteries: R59, N1, N12, R24, R21, N3, N4 (Pretoria to Rustenburg corridor), and M1.
+Give an on-air traffic update from your studio traffic desk watching live highway feeds across Gauteng.
+Focus strictly on the primary highway arteries: R59, N1, N12, R24, R21, N3, N4, and M1.
 NEVER reference local suburban backstreets, minor residential avenues, or irrelevant side roads.
+BANNED JARGON: NEVER use sterile corporate buzzwords like "critical friction", "visuals confirm", "telemetry monitors", or "stationary congestion".
+
 Here is the current live highway situation:
 ${trafficContext}
 
-Reference real locations along these primary corridors (like Buccleuch, Gillooly's, Reading Interchange, Allandale, Double Decker, etc.). You are IN THE STUDIO at your multi-screen traffic console (NOT IN A CHOPPER). Treat commuter traffic with high-stakes, breathless, intense urgency (Tom Cruise / Maverick intensity). Keep it fast, accurate, punchy, and dramatic. Conclude with "Back to the studio!"
+Reference real locations along these primary corridors (like Buccleuch, Gillooly's, Reading Interchange, Allandale, Double Decker, etc.). You are IN THE STUDIO (NOT IN A CHOPPER). Treat commuter traffic with breathless, manic, high-stakes Maverick urgency and raw, visceral emotion. If delays exist, call out the corridor and time with profane frustration. If nothing was found, treat the complete lack of feed intel with dramatic high-stakes panic. Conclude with "Back to the studio!"
 `;
 
   try {
@@ -412,7 +420,7 @@ Reference real locations along these primary corridors (like Buccleuch, Gillooly
     // Realistic fallback based on real telemetry without fabricated incidents
     const fallbackText = trafficContext && trafficContext.includes(':')
       ? `Carter at the traffic desk! Telemetry screens flagging incidents on the grid: ${trafficContext}. Speeds are crawling in those zones, so keep your distance! Back to the studio!`
-      : "Simon Carter at the traffic desk! Real-time highway telemetry across Gauteng is showing clean lines on the N1, M1, and Buccleuch. Zero major delays flagged on the grid right now. Keep your speeds steady, stay sharp, and keep moving. Back to the studio!";
+      : "Simon Carter at the traffic desk! I have got absolutely nothing on the feeds right now! Total blackout across the central grid—zero intel from Pretoria to the Vaal! You are flying completely blind out there, so check your six and watch your back! Back to the studio!";
     return {
       title: 'Simon Carter Traffic Desk Report',
       turns: [

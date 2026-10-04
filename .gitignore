@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# scripts and python
+/scripts/
+*.py
+*.pyc
+__pycache__/
+

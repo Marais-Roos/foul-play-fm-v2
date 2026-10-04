@@ -42,6 +42,8 @@ export interface Show {
   jellyfinPlaylistId?: string;
   coverImage?: any;
   imageUrl?: string;
+  sideCharacters?: SideCharacter[];
+  callers?: CallerPersona[];
 }
 
 export interface DJ {

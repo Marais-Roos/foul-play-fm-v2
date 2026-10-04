@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { stationBible } from "@/lib/data/station";
+import { stationBible, fetchSanityCallers } from "@/lib/data/station";
+import { CallerPersona } from "@/lib/types/station";
 import { useAudioPlayer } from "../audio-context";
 import { Radio, PhoneCall, Sparkles, Newspaper, Trophy, Navigation, Clock } from "lucide-react";
 
@@ -30,7 +31,14 @@ export function LiveView() {
   const [isLoadingTraffic, setIsLoadingTraffic] = useState(false);
   const [trafficQueried, setTrafficQueried] = useState(false);
 
-  const callers = stationBible.callers;
+  const [callers, setCallers] = useState<CallerPersona[]>(stationBible.callers);
+
+  useEffect(() => {
+    fetchSanityCallers().then((data) => {
+      if (data && data.length > 0) setCallers(data);
+    });
+  }, []);
+
   const selectedCaller = callers.find((c) => c.voiceTag === selectedCallerTag) || callers[0];
 
   const refreshTraffic = async () => {
@@ -89,7 +97,7 @@ export function LiveView() {
             {/* Subtle, calm on-air status indicator (no rapid flashing) */}
             <span className="w-2 h-2 rounded-full bg-[#CCFF00] opacity-80" />
             <span className="text-xs font-bold uppercase tracking-wider text-[#CCFF00]">
-              LIVE ON AIR — 98.4 FM
+              LIVE ON AIR — FOUL PLAY FM
             </span>
           </div>
           <h1 className="text-3xl font-bold text-white font-[family-name:var(--font-heading)]">

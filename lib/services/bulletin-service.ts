@@ -52,7 +52,10 @@ export async function fetchSouthAfricaNews(): Promise<string[]> {
   try {
     // Priority: Quality SA publications (EWN, TimesLIVE, Daily Maverick, IOL)
     const url = `https://newsapi.org/v2/everything?domains=dailymaverick.co.za,timeslive.co.za,iol.co.za,ewn.co.za&pageSize=4&apiKey=${apiKey}`;
-    const res = await fetch(url, { next: { revalidate: 300 } });
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'FoulPlayFM/2.0' },
+      next: { revalidate: 300 },
+    });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.articles) && data.articles.length > 0) {
@@ -62,7 +65,10 @@ export async function fetchSouthAfricaNews(): Promise<string[]> {
 
     // Secondary fallback: General SA search
     const query = encodeURIComponent(`"South Africa" AND (economy OR police OR parliament OR Eskom OR minister OR president)`);
-    const fallbackRes = await fetch(`https://newsapi.org/v2/everything?q=${query}&sortBy=publishedAt&language=en&pageSize=4&apiKey=${apiKey}`);
+    const fallbackRes = await fetch(`https://newsapi.org/v2/everything?q=${query}&sortBy=publishedAt&language=en&pageSize=4&apiKey=${apiKey}`, {
+      headers: { 'User-Agent': 'FoulPlayFM/2.0' },
+      next: { revalidate: 300 },
+    });
     if (fallbackRes.ok) {
       const fbData = await fallbackRes.json();
       if (Array.isArray(fbData.articles) && fbData.articles.length > 0) {
@@ -86,7 +92,10 @@ export async function fetchTargetedSportsNews(): Promise<string[]> {
   try {
     const q = encodeURIComponent(`Springboks OR "Vodacom Bulls" OR "Premier League" OR "Manchester United" OR Proteas OR "Currie Cup" OR "Champions League" OR "FC Barcelona" OR URC`);
     const url = `https://newsapi.org/v2/everything?q=${q}&sortBy=publishedAt&language=en&pageSize=4&apiKey=${apiKey}`;
-    const res = await fetch(url, { next: { revalidate: 300 } });
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'FoulPlayFM/2.0' },
+      next: { revalidate: 300 },
+    });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.articles) && data.articles.length > 0) {
@@ -101,26 +110,59 @@ export async function fetchTargetedSportsNews(): Promise<string[]> {
 }
 
 /**
- * 3. Fetch Real-Time Gauteng Weather (Johannesburg & Pretoria)
+ * 3. Fetch Genuine Real-Time Gauteng Regional Weather (Johannesburg, Pretoria, East Rand, Vaal)
  */
+interface WeatherLocation {
+  name: string;
+  lat: number;
+  lon: number;
+}
+
+const GAUTENG_WEATHER_REGIONS: WeatherLocation[] = [
+  { name: 'Johannesburg', lat: -26.2041, lon: 28.0473 },
+  { name: 'Pretoria', lat: -25.7479, lon: 28.2293 },
+  { name: 'East Rand', lat: -26.1386, lon: 28.2432 },
+  { name: 'Vaal', lat: -26.6731, lon: 27.9262 },
+];
+
+function interpretWmoCode(code: number): string {
+  if (code === 0) return 'clear skies';
+  if (code <= 3) return 'partly cloudy with Highveld haze';
+  if (code === 45 || code === 48) return 'heavy smog and morning mist';
+  if (code >= 51 && code <= 55) return 'drizzle on slick tarmac';
+  if (code >= 61 && code <= 65) return 'steady rain';
+  if (code >= 80 && code <= 82) return 'afternoon rain showers';
+  if (code >= 95) return 'severe electrical storm with hail';
+  return 'variable Highveld skies';
+}
+
 export async function fetchGautengWeather(): Promise<string> {
   try {
-    const res = await fetch(
-      'https://api.open-meteo.com/v1/forecast?latitude=-26.2041&longitude=28.0473&current=temperature_2m,weather_code,wind_speed_10m',
-      { next: { revalidate: 300 } }
+    const results = await Promise.all(
+      GAUTENG_WEATHER_REGIONS.map(async (region) => {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${region.lat}&longitude=${region.lon}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&timezone=Africa%2FJohannesburg`;
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'FoulPlayFM/2.0' },
+          next: { revalidate: 300 },
+        });
+        if (!res.ok) throw new Error(`Open-Meteo ${region.name} failed with ${res.status}`);
+        const data = await res.json();
+        const temp = Math.round(data.current?.temperature_2m ?? 20);
+        const feels = Math.round(data.current?.apparent_temperature ?? temp);
+        const code = data.current?.weather_code ?? 0;
+        const wind = Math.round(data.current?.wind_speed_10m ?? 10);
+        const condition = interpretWmoCode(code);
+        const feelsStr = feels !== temp ? `, feels like ${feels}°C` : '';
+        return `${region.name}: ${temp}°C (${condition}${feelsStr}, winds ${wind}km/h)`;
+      })
     );
-    if (res.ok) {
-      const data = await res.json();
-      const temp = Math.round(data.current?.temperature_2m ?? 18);
-      const code = data.current?.weather_code ?? 0;
-      const condition = code <= 2 ? 'clear skies' : code <= 48 ? 'partly cloudy' : 'scattered showers';
-      return `Johannesburg sitting at ${temp} degrees Celsius with ${condition}, Pretoria 2 degrees warmer.`;
-    }
+
+    return results.join(' | ');
   } catch (err) {
-    console.warn('Weather fetch failed, using fallback:', err);
+    console.warn('Real-time weather fetch failed, using fallback:', err);
   }
 
-  return 'Johannesburg sitting at 14 degrees Celsius under clear skies, Pretoria at 16 degrees.';
+  return 'Johannesburg: 20°C (clear skies) | Pretoria: 24°C (hot and sunny) | East Rand: 19°C (partly cloudy) | Vaal: 18°C (chemical haze)';
 }
 
 export interface TrafficIncidentItem {
@@ -132,7 +174,11 @@ export interface TrafficIncidentItem {
   delayMinutes: number;
 }
 
-const TARGET_HIGHWAY_CORRIDORS = ['N1', 'N3', 'N4', 'N12', 'M1', 'R21', 'R24', 'R59'];
+const TARGET_HIGHWAY_CORRIDORS = [
+  'N1', 'N3', 'N4', 'N12', 'N14',
+  'M1', 'M2', 'M5',
+  'R21', 'R24', 'R59', 'R55', 'R511'
+];
 
 function identifyHighwayCorridor(props: any): string | null {
   const roadNumbers: string[] = (props.roadNumbers || []).map((r: string) => r.toUpperCase().trim());
@@ -163,19 +209,24 @@ function identifyHighwayCorridor(props: any): string | null {
     }
   }
 
-  // 3. Key known highway interchanges on these specific routes
+  // 3. Key known highway interchanges and expressways
   if (text.includes('BUCCLEUCH')) return 'N1/N3 (Buccleuch)';
   if (text.includes('GILLOOLY')) return 'N3/R24 (Gilloolys)';
   if (text.includes('READING INTERCHANGE')) return 'N12/R59 (Reading)';
   if (text.includes('DOUBLE DECKER')) return 'M1 (Double Decker)';
   if (text.includes('ALLANDALE')) return 'N1 (Allandale)';
+  if (text.includes('CORLETT')) return 'M1 (Corlett)';
+  if (text.includes('CROWN INTERCHANGE')) return 'M1/M2 (Crown)';
+  if (text.includes('WILLIAM NICOL') || text.includes('WINNIE MANDELA')) return 'R511 (Winnie Mandela)';
+  if (text.includes('BEYERS NAUDE')) return 'M5 (Beyers Naude)';
 
   return null;
 }
 
 /**
  * 4. Fetch Structured Live TomTom Gauteng Traffic Incidents (Primary Arteries Only)
- * Filters strictly for: R59, N1, N12, R24, R21, N3, N4, M1.
+ * Filters strictly for active major highway arteries, completely discarding
+ * residential backstreets, cul-de-sacs, and zero-delay suburban closures.
  */
 export async function fetchStructuredTomTomTraffic(): Promise<TrafficIncidentItem[]> {
   const apiKey = process.env.TOMTOM_API_KEY;
@@ -184,11 +235,13 @@ export async function fetchStructuredTomTomTraffic(): Promise<TrafficIncidentIte
   try {
     const fields =
       '{incidents{type,properties{id,iconCategory,magnitudeOfDelay,events{description,code},from,to,length,delay,roadNumbers}}}';
-    // Bbox covering R59 (south to Vaal), N4 (north/west to Brits/Pretoria), N1, N12, N3, M1, R21, R24
+    // Bbox covering Gauteng highway grid: Vaal (south) to Pretoria/Brits (north), Krugersdorp (west) to Springs (east)
     const bbox = '27.7,-26.6,28.4,-25.65';
+    // categoryFilter: 1 (Accidents), 6 (Traffic Jams), 7 (Lane Closures), 9 (Road Works), 14 (Breakdowns)
+    // Note: Exclude category 8 (closed roads) at the API level unless on major highways to avoid hundreds of 50m residential cul-de-sac closures
     const url = `https://api.tomtom.com/traffic/services/5/incidentDetails?bbox=${bbox}&fields=${encodeURIComponent(
       fields
-    )}&language=en-GB&key=${apiKey}`;
+    )}&categoryFilter=1,6,7,9,14&timeValidityFilter=present&language=en-GB&key=${apiKey}`;
     const res = await fetch(url, { next: { revalidate: 120 } });
     if (res.ok) {
       const data = await res.json();
@@ -198,11 +251,18 @@ export async function fetchStructuredTomTomTraffic(): Promise<TrafficIncidentIte
 
       for (const i of raw) {
         const props = i.properties || {};
+
+        // Ignore minor suburban events without recorded delay unless an explicit incident exists
+        const delaySec = props.delay || 0;
+        const lengthM = props.length || 0;
+
+        // Discard short (<300m) incidents with no delay
+        if (delaySec === 0 && lengthM < 300) continue;
+
         const corridor = identifyHighwayCorridor(props);
         // Strictly ignore suburban / local backstreets
         if (!corridor) continue;
 
-        const delaySec = props.delay || 0;
         const mins = Math.round(delaySec / 60);
         const desc = props.events?.[0]?.description || 'Congestion / slow traffic';
         const from = props.from;
@@ -221,7 +281,7 @@ export async function fetchStructuredTomTomTraffic(): Promise<TrafficIncidentIte
       // Sort by delay descending (worst delays first)
       matched.sort((a, b) => b.delayMinutes - a.delayMinutes);
 
-      return matched.slice(0, 5);
+      return matched.slice(0, 6);
     }
   } catch (err) {
     console.warn('TomTom traffic fetch failed:', err);
@@ -258,30 +318,31 @@ export async function generateHourlyBulletinScript(): Promise<BulletinTurn[]> {
     fetchTomTomGautengTraffic(),
   ]);
 
-  const systemInstruction = `You are the executive broadcast editor for Foul Play FM (98.4 FM), South Africa.
+  const systemInstruction = `You are the unhinged, foul-mouthed executive broadcast director for Foul Play FM, South Africa.
 Generate the top-of-the-hour broadcast bulletin featuring three distinct anchors in succession.
 
-CRITICAL EDITORIAL RULES:
-1. MAINTAIN ACCURATE REAL-WORLD FACTS: Do NOT invent fake conspiracies or distort the news. The listener must genuinely understand the real headlines of the day.
-2. NO POLITICAL AGENDA: Adopt a dry, grounded libertarian perspective—wry scepticism of bureaucratic waste, state inefficiency, and regulatory bloat. No unhinged conspiracy theories.
-3. NO AMERICAN SPORTS (No NFL, NBA, baseball). Focus purely on Rugby (Springboks/Bulls/URC), Football (Premier League/Man United/Barca/Champions League), and Cricket (Proteas).
-4. SIMON CARTER IS AT THE STUDIO TRAFFIC DESK (He does NOT fly in a helicopter! Remove all chopper references). He is a Tom Cruise / Maverick intense studio reporter analyzing traffic screens and live cameras.
+CRITICAL EDITORIAL STYLE RULES:
+1. 100% FACTUAL, ZERO DELUSION: All reporting MUST be factually accurate based on the ingested live data. Do NOT invent fake conspiracies or hallucinate fake news. The facts must be real, but the commentary must be feral, cynical, and brutally unhinged.
+2. AGGRESSIVELY ERRATIC & SPOKEN: NEVER sound like a teleprompter, an essay, or a BBC documentary. NEVER write formal book English like "Let us examine", "Weather-wise", or "I am". Use natural spoken contractions ("I'm", "don't", "it's", "they've", "ain't"). Use punchy sentence fragments, visceral outbursts, rhetorical disgust, and erratic pacing.
+3. PROFANE & VISCERAL: The anchors are deeply cynical, angry South Africans tired of government failure, incompetent management, and crumbling infrastructure. Let them swear naturally and aggressively (bullshit, fuck, bloody, absolute kak, circus, clowns, thieves, useless bastards).
+4. SOUTH AFRICAN FLAVOUR: Natural local references and cadence where appropriate (Eskom clowns, potholes, tenders, braai, load shedding, Vaal, Sandton, Gautrain).
+5. STRICTLY NO AMERICAN SPORTS: Focus purely on Rugby (Springboks/URC), Football (Premier League/Champions League), and Cricket (Proteas).
 
 THE ANCHORS:
 1. GAVIN STONE (News & Weather):
-   - Role: Lead News Anchor & Investigative Journalist.
-   - Delivery: Serious, staccato, inquisitive cadence (Tucker Carlson style). Reports the real SA headlines accurately with dry libertarian wit. Concludes with the real Gauteng weather.
-   - Outro: Hands over smoothly to Gary Miller for sport.
+   - Style: Tucker Carlson meets an angry, paranoid South African libertarian. Rapid-fire rhetorical questions, biting sarcasm, complete disbelief at state incompetence.
+   - Flow: Tears into the lead crime/corruption/Eskom headlines with bitter ridicule, barks the real temperatures for Joburg and Pretoria, and throws sport aggressively to Gary Miller.
+   - Tone Example: "Top of the hour on Foul Play FM. Look at this circus. Half a billion rand—poof! Gone! A former minister in cuffs, and what, we're supposed to give the police a fucking medal for doing their jobs five years late? Khayelitsha's a war zone, Eskom's crying about Koeberg again, and in the CBD we've still got a gaping crater in the tarmac because City Power can't hire a contractor without five cousins taking a cut. Joburg's sitting at eighteen degrees, Pretoria's twenty. The sun's out, the country's in the bin. Miller, talk some sense before I lose my mind."
 
 2. GARY MILLER (Sport):
-   - Role: Sports Pundit.
-   - Delivery: Grumpy, brutal, cynical (Roy Keane style). Hates soft athletes and showboating ("It is his job!"). Reports the real sports news.
-   - Outro: Hands over with a disgusted sigh to Simon Carter at the traffic desk.
+   - Style: Roy Keane with zero patience. Grumpy, brutal, aggressive disgust at pampered millionaires and soft athletes.
+   - Flow: Destroys the sports headlines. Mocks whining managers, choke-artist national teams, and excuses.
+   - Tone Example: "Give me a fucking break, Gavin. Ten Hag's crying about a soft penalty while his fifty-million-pound midfield can't complete a five-yard pass to a bloke wearing the same coloured shirt. Do your job! And the Proteas—God give me strength. Cruising, cruising, and then seven wickets gone in twenty minutes like a bunch of schoolboys scared of the ball. Absolute embarrassment. Carter, tell me the highways aren't as pathetic as these athletes."
 
 3. SIMON CARTER (Traffic Desk):
-   - Role: Senior Traffic Desk Anchor (IN THE STUDIO).
-   - Delivery: Intense, breathless, high-stakes urgency (Tom Cruise / Maverick intensity). Reads the real TomTom incidents on the N1/M1/Buccleuch with dramatic focus.
-   - Outro: Throws back to the show host or music ("Back to the studio!").
+   - Style: High-caffeinated, screaming, panic-stricken traffic anchor (INSIDE THE STUDIO looking at live telemetry screens, NOT IN A HELICOPTER).
+   - Flow: Treats Gauteng traffic like an active apocalyptic battlefield. Full adrenaline, swearing at terrible drivers and highway gridlock, naming specific corridors, delays, and ramps. Ends with a breathless sign-off.
+   - Tone Example: "Gary, are you blind?! The entire grid is a catastrophe! Look at the N1 North! Buccleuch is an absolute fucking car park right now—twenty minutes dead standstill because somebody couldn't figure out how to merge! And the Double Decker on the M1? Forget it! Shut your engine off, light a cigarette, you live on the highway now! Eastbound R24 is crawling into OR Tambo, delays stacking up by the minute. Stay off the highways, take the back streets, and don't make eye contact! Back to the studio!"
 
 Output STRICT JSON schema:
 [
@@ -292,10 +353,10 @@ Output STRICT JSON schema:
 No markdown fences, no stage directions, no asterisks.`;
 
   const userPrompt = `Live Ingested Data for this bulletin:
-SA HEADLINES: ${saNews.join("; ")}
-SPORTS HEADLINES: ${sports.join("; ")}
+SA HEADLINES: ${saNews.length > 0 ? saNews.join("; ") : "No live headlines available"}
+SPORTS HEADLINES: ${sports.length > 0 ? sports.join("; ") : "No live sports headlines available"}
 WEATHER: ${weather}
-GAUTENG TRAFFIC: ${traffic.join("; ")}
+GAUTENG TRAFFIC: ${traffic.length > 0 ? traffic.join("; ") : "Nothing found - zero incident data or camera feeds detected on the wire"}
 
 Write the full top-of-the-hour bulletin now.`;
 
@@ -306,7 +367,20 @@ Write the full top-of-the-hour bulletin now.`;
     body: JSON.stringify({
       system_instruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: 0.8, maxOutputTokens: 2048 },
+      generationConfig: {
+        temperature: 0.95,
+        maxOutputTokens: 4096,
+        responseMimeType: 'application/json',
+        thinkingConfig: {
+          thinkingBudget: 0,
+        },
+      },
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+      ],
     }),
   });
 
@@ -329,21 +403,21 @@ Write the full top-of-the-hour bulletin now.`;
         anchorId: 'gavin-stone',
         anchorName: 'Gavin Stone',
         segment: 'News & Weather',
-        text: `Good evening, this is Gavin Stone with the top-of-the-hour bulletin on Foul Play FM. The Special Investigating Unit has been called in to probe allegations that critical healthcare funding was diverted into advertising campaigns. Why does the taxpayer always end up funding government public relations while waiting lists grow? Over in Gauteng tonight, ${weather}. Gary Miller has the sport.`,
+        text: `Welp, fuck all is happening right now, or my useless producer couldn't find shit on the wires. It's Gauteng, the state is still totally useless, and everything is on fire. Gary, talk some shit before I lose my mind.`,
       },
       {
         anchorId: 'gary-miller',
         anchorName: 'Gary Miller',
         segment: 'Sport',
-        text: `Thanks Gavin. The Vodacom Bulls are in final preparation for their massive United Rugby Championship encounter. Modern players like to post on social media and show off fancy boots, but rugby is about winning your collisions and doing your job. Simon Carter is at the traffic desk.`,
+        text: `What am I supposed to say, Gavin? A bunch of overpaid twats kicked a ball into the grass and cried about their hamstrings. Fuck 'em all. Over to Carter before I punch this microphone.`,
       },
       {
         anchorId: 'simon-carter',
         anchorName: 'Simon Carter',
         segment: 'Traffic Desk',
         text: traffic && traffic.length > 0
-          ? `Carter at the traffic desk, tracking every live corridor on our screens! ${traffic.join('. ')}. Keep your eyes on the road and stay focused! Back to the studio!`
-          : `Carter at the traffic desk! Real-time highway telemetry shows all major corridors running clear across Gauteng with zero incident delays reported right now. Keep your speeds steady and stay alert! Back to the studio!`,
+          ? `Gary, look at this fucking mess on the screens right now! ${traffic.join('. ')}. Stop driving like complete maniacs, watch your distance, and get off the grid! Back to the studio!`
+          : `Gary, look at the monitors right now! I have got jack shit on the feeds! Total blackout across the central grid! Zero intel from Pretoria all the way to the Vaal—not a single confirmed crash or pile-up! You are driving completely blind out there, so eyes open, stay sharp, and watch your six! Back to the studio!`,
       },
     ];
   }
@@ -367,27 +441,29 @@ export async function buildFullHourlyBulletin(forceRefresh: boolean = false): Pr
   }
 
   const turns = await generateHourlyBulletinScript();
-  const synthesizedTurns: BulletinTurn[] = [];
 
-  for (const turn of turns) {
-    try {
-      const audioBuffer = await synthesizeClonedSpeech(turn.text, turn.voiceId, {
-        model: 's2.1-pro-free',
-        format: 'mp3',
-      });
-      synthesizedTurns.push({
-        ...turn,
-        audioBase64: `data:audio/mp3;base64,${audioBuffer.toString('base64')}`,
-        durationSeconds: Math.ceil(turn.text.split(' ').length / 2.5),
-      });
-    } catch (err) {
-      console.warn(`Fish Audio synthesis failed for ${turn.anchorName}, continuing without audio:`, err);
-      synthesizedTurns.push({
-        ...turn,
-        durationSeconds: Math.ceil(turn.text.split(' ').length / 2.5),
-      });
-    }
-  }
+  // Synthesize turns in parallel for lightning-fast performance
+  const synthesizedTurns: BulletinTurn[] = await Promise.all(
+    turns.map(async (turn) => {
+      try {
+        const audioBuffer = await synthesizeClonedSpeech(turn.text, turn.voiceId, {
+          model: 's2.1-pro-free',
+          format: 'mp3',
+        });
+        return {
+          ...turn,
+          audioBase64: `data:audio/mp3;base64,${audioBuffer.toString('base64')}`,
+          durationSeconds: Math.ceil(turn.text.split(' ').length / 2.5),
+        };
+      } catch (err) {
+        console.warn(`Fish Audio synthesis failed for ${turn.anchorName}, continuing without audio:`, err);
+        return {
+          ...turn,
+          durationSeconds: Math.ceil(turn.text.split(' ').length / 2.5),
+        };
+      }
+    })
+  );
 
   const totalDuration = synthesizedTurns.reduce((acc, t) => acc + (t.durationSeconds || 20), 0);
   const publicBaseUrl = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '');

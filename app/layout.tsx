@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FOUL PLAY FM — 98.4 FM | Gauteng's Most Unhinged Radio",
-  description: "Autonomous AI-powered satirical radio station broadcasting from an undisclosed underground bunker in Gauteng.",
+  title: "FOUL PLAY FM — Radio for people who wish they were deaf.",
+  description: "Radio for people who wish they were deaf. Broadcasting unfiltered satire 24/7.",
 };
 
 export default function RootLayout({

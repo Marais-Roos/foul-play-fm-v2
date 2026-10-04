@@ -18,7 +18,30 @@ export const SHOWS_QUERY = groq`
       bio,
       voicePrompt,
       "voiceSampleUrl": voiceSample.asset->url,
-      parodyOf
+      parodyOf,
+      fishAudioVoiceId
+    },
+    sideCharacters[]->{
+      _id,
+      name,
+      "slug": slug.current,
+      role,
+      image,
+      bio,
+      voicePrompt,
+      "voiceSampleUrl": voiceSample.asset->url,
+      parodyOf,
+      fishAudioVoiceId
+    },
+    callers[]->{
+      _id,
+      voiceTag,
+      archetype,
+      targetOfSatire,
+      contextStrategy,
+      voicePrompt,
+      sampleQuote,
+      fishAudioVoiceId
     }
   }
 `;
@@ -32,7 +55,23 @@ export const PRESENTERS_QUERY = groq`
     bio,
     voicePrompt,
     "voiceSampleUrl": voiceSample.asset->url,
-    parodyOf
+    parodyOf,
+    fishAudioVoiceId
+  }
+`;
+
+export const SIDE_CHARACTERS_QUERY = groq`
+  *[_type == "sideCharacter"] | order(name asc) {
+    _id,
+    name,
+    "slug": slug.current,
+    role,
+    image,
+    bio,
+    voicePrompt,
+    "voiceSampleUrl": voiceSample.asset->url,
+    parodyOf,
+    fishAudioVoiceId
   }
 `;
 
@@ -44,6 +83,7 @@ export const CALLERS_QUERY = groq`
     targetOfSatire,
     contextStrategy,
     voicePrompt,
-    sampleQuote
+    sampleQuote,
+    fishAudioVoiceId
   }
 `;

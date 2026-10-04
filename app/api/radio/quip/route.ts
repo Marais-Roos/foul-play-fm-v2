@@ -23,6 +23,76 @@ import {
 import { synthesizeClonedSpeech } from '@/lib/services/fish-audio';
 import { fetchTomTomGautengTraffic } from '@/lib/services/bulletin-service';
 
+const KNOWN_CHARACTER_VOICE_IDS: Record<string, string> = {
+  'chip-walton': 'd527402573e240b0b031d17aad89ef89',
+  'chip-the-fearmonger-walton': 'd527402573e240b0b031d17aad89ef89',
+  'tony-tatum': '67c1ae8d7ee6462e986ec936d6ccbc98',
+  'tony-the-titan-tatum': '67c1ae8d7ee6462e986ec936d6ccbc98',
+  'benny-st-pierre': 'f587effe905b4d4ab22c805b16b85087',
+  'benny-the-sloth-st-pierre': 'f587effe905b4d4ab22c805b16b85087',
+  'veronica-vixen': 'efe8f141c12b4830883e9aec05f9391f',
+  'veronica-vee-vixen': 'efe8f141c12b4830883e9aec05f9391f',
+  'cynthia-blight': '916bb3d02cf94c14ade432c585753d1e',
+  'cynthia-cyn-blight': '916bb3d02cf94c14ade432c585753d1e',
+  'captain-jeff-mcchad': 'fa76d3a10b504ba3bb908a85c034bd0c',
+  'captain-jeff-jeb-mcchad': 'fa76d3a10b504ba3bb908a85c034bd0c',
+  'gary-goldstein': 'e9dd99c678bd44ceaea247426995874f',
+  'gary-the-guru-goldstein': 'e9dd99c678bd44ceaea247426995874f',
+  'jodie-johnson': 'ae91061816cd4b57a07f357b8043b793',
+  'jodie-jinx-johnson': 'ae91061816cd4b57a07f357b8043b793',
+  'bambi-mcqueen': 'de762b532db1447e8b59ce858737ae66',
+  'bambi-the-dazzler-mcqueen': 'de762b532db1447e8b59ce858737ae66',
+  'marcus-miles': '20d2b982c2c1418d85b388769230164f',
+  'dividend-dave': '52d9d7520ae94ecaa4cb23b6b8e1692d',
+  'serena-bloom': '8de847a878a74fb3a58fdecd60c9ec42',
+  'gavin-stone': '5754add8d0bc461ca5497455c23d5459',
+  'gary-miller': 'db6b76e124d640ef92f2b27db5c1a2c2',
+  'simon-carter': '70bf5611864f4f668074c5578d8b2cce',
+  'warrant-officer-van-der-merwe': 'c208b9a1a2d94f689f508c937ea15fcb',
+};
+
+function resolveVoiceId(character?: { id?: string; slug?: string; name?: string; fishAudioVoiceId?: string | null } | null, fallbackId?: string): string {
+  if (character?.fishAudioVoiceId) return character.fishAudioVoiceId;
+  const id = character?.id || character?.slug || fallbackId || '';
+  const clean = id.toLowerCase().trim();
+  if (KNOWN_CHARACTER_VOICE_IDS[clean]) return KNOWN_CHARACTER_VOICE_IDS[clean];
+  for (const [key, vId] of Object.entries(KNOWN_CHARACTER_VOICE_IDS)) {
+    if (clean && (key.includes(clean) || clean.includes(key))) {
+      return vId;
+    }
+  }
+  const nameClean = (character?.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  for (const [key, vId] of Object.entries(KNOWN_CHARACTER_VOICE_IDS)) {
+    const keyClean = key.replace(/[^a-z0-9]/g, '');
+    if (nameClean && (keyClean.includes(nameClean) || nameClean.includes(keyClean))) {
+      return vId;
+    }
+  }
+  return '67c1ae8d7ee6462e986ec936d6ccbc98';
+}
+
+function resolveSampleFile(character?: { id?: string; slug?: string; name?: string; voiceSampleFile?: string } | null, fallbackId?: string): string {
+  if (character?.voiceSampleFile) return character.voiceSampleFile;
+  const id = character?.id || character?.slug || character?.name || fallbackId || '';
+  const clean = id.toLowerCase().trim();
+  const fileMap: Record<string, string> = {
+    'chip': 'data/voices/main_presenters/chip_walton_sample.mp3',
+    'tony': 'data/voices/main_presenters/tony_tatum_sample.mp3',
+    'benny': 'data/voices/main_presenters/benny_st_pierre_sample.mp3',
+    'veronica': 'data/voices/main_presenters/veronica_vixen_sample.mp3',
+    'cynthia': 'data/voices/main_presenters/cynthia_blight_sample.mp3',
+    'capt': 'data/voices/main_presenters/capt_jeff_mcchad_sample.mp3',
+    'jeff': 'data/voices/main_presenters/capt_jeff_mcchad_sample.mp3',
+    'gary': 'data/voices/main_presenters/gary_goldstein_sample.mp3',
+    'jodie': 'data/voices/main_presenters/jodie_johnson_sample.mp3',
+    'bambi': 'data/voices/main_presenters/bambi_mcqueen_sample.mp3',
+  };
+  for (const [key, path] of Object.entries(fileMap)) {
+    if (clean.includes(key)) return path;
+  }
+  return 'data/voices/main_presenters/tony_tatum_sample.mp3';
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -68,7 +138,7 @@ export async function POST(request: NextRequest) {
     if (sideChar) {
       // Single side character trigger (e.g. Simon Carter, Dividend Dave)
       speakerName = sideChar.name;
-      const voiceId = sideChar.fishAudioVoiceId || '67c1ae8d7ee6462e986ec936d6ccbc98';
+      const voiceId = resolveVoiceId(sideChar, characterId);
       characterRole = 'sidekick';
 
       if (customText) {
@@ -97,7 +167,7 @@ export async function POST(request: NextRequest) {
     } else if (dj) {
       // Single DJ trigger (e.g. from Presenters page card)
       speakerName = dj.name;
-      const voiceId = dj.fishAudioVoiceId || '67c1ae8d7ee6462e986ec936d6ccbc98';
+      const voiceId = resolveVoiceId(dj, characterId);
       characterRole = 'host';
 
       if (customText) {
@@ -120,7 +190,7 @@ export async function POST(request: NextRequest) {
                    sanityPresenters[0] ||
                    stationBible.djs[0];
       speakerName = host.name;
-      const voiceId = host.fishAudioVoiceId || '67c1ae8d7ee6462e986ec936d6ccbc98';
+      const voiceId = resolveVoiceId(host, hostId);
       characterRole = 'caller';
 
       const segment = await generateCallerSegment(show, host, caller, topic || 'Load shedding, potholes, and aliens');
@@ -142,7 +212,7 @@ export async function POST(request: NextRequest) {
       if (customText) {
         speakerName = effectiveHosts[0].name;
         spokenText = customText;
-        const voiceId = effectiveHosts[0].fishAudioVoiceId || '67c1ae8d7ee6462e986ec936d6ccbc98';
+        const voiceId = resolveVoiceId(effectiveHosts[0]);
         audioBuffer = await synthesizeClonedSpeech(spokenText, voiceId, {
           model: 's2.1-pro-free',
           format: 'mp3',
@@ -165,7 +235,7 @@ export async function POST(request: NextRequest) {
           const turnBuffers = await Promise.all(
             turns.map(async (turn) => {
               const speakerDJ = getDJById(turn.speakerId) || effectiveHosts.find(h => h.id === turn.speakerId) || effectiveHosts[0];
-              const turnVoiceId = speakerDJ?.fishAudioVoiceId || effectiveHosts[0].fishAudioVoiceId || '67c1ae8d7ee6462e986ec936d6ccbc98';
+              const turnVoiceId = resolveVoiceId(speakerDJ, turn.speakerId) || resolveVoiceId(effectiveHosts[0]);
               return synthesizeClonedSpeech(turn.text, turnVoiceId, {
                 model: 's2.1-pro-free',
                 format: 'mp3',
@@ -177,7 +247,7 @@ export async function POST(request: NextRequest) {
           audioBuffer = Buffer.concat(turnBuffers);
         } catch (synthErr) {
           console.warn('Fish Audio live synthesis timed out or failed, using local presenter sample fallback:', synthErr);
-          const sampleRel = effectiveHosts[0]?.voiceSampleFile || 'data/voices/main_presenters/tony_tatum_sample.mp3';
+          const sampleRel = resolveSampleFile(effectiveHosts[0]);
           const samplePath = path.join(process.cwd(), sampleRel);
           if (fs.existsSync(samplePath)) {
             audioBuffer = fs.readFileSync(samplePath);

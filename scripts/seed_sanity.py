@@ -68,6 +68,7 @@ def main():
                 "bio": dj["description"],
                 "voicePrompt": dj["personality"],
                 "parodyOf": dj["parodyOf"],
+                "fishAudioVoiceId": dj.get("fishAudioVoiceId"),
             }
         })
 
@@ -83,6 +84,7 @@ def main():
                 "bio": sc["description"],
                 "voicePrompt": f"Role: {sc['role']}. Prompt: {sc['aiPersonalityPrompt']}",
                 "parodyOf": sc["parodyOf"],
+                "fishAudioVoiceId": sc.get("fishAudioVoiceId"),
             }
         })
 
@@ -125,6 +127,7 @@ def main():
                 "contextStrategy": caller["aiContextStrategy"],
                 "voicePrompt": caller["description"],
                 "sampleQuote": caller["recommendedPreviewText"],
+                "fishAudioVoiceId": caller.get("fishAudioVoiceId"),
             }
         })
 
