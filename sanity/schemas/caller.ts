@@ -52,7 +52,7 @@ export default defineType({
   preview: {
     select: {
       title: 'archetype',
-      subtitle: 'targetOfSatire',
+      subtitle: 'voiceTag',
     },
   },
 });

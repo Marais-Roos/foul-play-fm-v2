@@ -136,8 +136,10 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const audioCtxRef = useRef<AudioContext | null>(null);
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
   const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
   const musicGainRef = useRef<GainNode | null>(null);
   const voiceGainRef = useRef<GainNode | null>(null);
+  const ambientGainRef = useRef<GainNode | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
   const isVoicePlayingRef = useRef<boolean>(false);
 
@@ -164,10 +166,16 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     currentShowRef.current = currentShow;
   }, [currentShow]);
 
-  // Helper to fetch random asset from Cloudflare R2
-  const fetchRandomR2Asset = useCallback(async (type: 'random-sweeper' | 'random-ad'): Promise<{ name: string; url: string } | null> => {
+  // Helper to fetch random or show-specific asset from Cloudflare R2
+  const fetchRandomR2Asset = useCallback(async (
+    type: 'random-sweeper' | 'random-ad',
+    showId?: string
+  ): Promise<{ name: string; url: string } | null> => {
     try {
-      const res = await fetch(`/api/radio/assets?type=${type}`);
+      const url = showId
+        ? `/api/radio/assets?type=${type}&showId=${encodeURIComponent(showId)}`
+        : `/api/radio/assets?type=${type}`;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         if (data.asset?.url) {
@@ -396,7 +404,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         // Step 5: Commercial Ad finished -> transition to COMMERCIAL_BREAK_SWEEP
         clockStepRef.current = 'COMMERCIAL_BREAK_SWEEP';
         setClockStep('COMMERCIAL_BREAK_SWEEP');
-        const sweeper = await fetchRandomR2Asset('random-sweeper');
+        const sweeper = await fetchRandomR2Asset('random-sweeper', show.id);
         if (sweeper && musicAudioRef.current) {
           setCurrentBroadcastItem({
             type: 'sweeper',
@@ -533,7 +541,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
         clockStepRef.current = 'INITIAL_SWEEPER';
         setClockStep('INITIAL_SWEEPER');
-        const sweeper = await fetchRandomR2Asset('random-sweeper');
+        const sweeper = await fetchRandomR2Asset('random-sweeper', show.id);
         if (sweeper && musicAudioRef.current) {
           setCurrentBroadcastItem({
             type: 'sweeper',
@@ -654,6 +662,19 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     voiceSource.connect(voiceGain);
     voiceGain.connect(masterGain);
     voiceGainRef.current = voiceGain;
+
+    // Ambient Channel (streams news music beds and helicopter SFX)
+    const ambientAudio = new Audio();
+    ambientAudio.crossOrigin = "anonymous";
+    ambientAudio.loop = true;
+    ambientAudioRef.current = ambientAudio;
+
+    const ambientSource = ctx.createMediaElementSource(ambientAudio);
+    const ambientGain = ctx.createGain();
+    ambientGain.gain.setValueAtTime(0, ctx.currentTime);
+    ambientSource.connect(ambientGain);
+    ambientGain.connect(masterGain);
+    ambientGainRef.current = ambientGain;
   }, [volume, advanceBroadcastClock]);
 
   // Tick the show clock every second
@@ -692,7 +713,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
     // If starting fresh or at initial sweeper
     if (clockStepRef.current === 'INITIAL_SWEEPER') {
-      const sweeper = await fetchRandomR2Asset('random-sweeper');
+      const sweeper = await fetchRandomR2Asset('random-sweeper', currentShowRef.current.id);
       if (sweeper && musicAudioRef.current) {
         setCurrentBroadcastItem({
           type: 'sweeper',
@@ -707,6 +728,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       }
     }
 
+    // Resume ambient background audio if bulletin was in progress
+    if (ambientAudioRef.current && isBulletinPlayingRef.current && ambientAudioRef.current.src && ambientAudioRef.current.paused) {
+      ambientAudioRef.current.play().catch(() => {});
+    }
+
     // Otherwise, step clock
     advanceBroadcastClock();
   }, [initAudio, fetchRandomR2Asset, advanceBroadcastClock]);
@@ -717,6 +743,9 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     }
     if (voiceAudioRef.current) {
       voiceAudioRef.current.pause();
+    }
+    if (ambientAudioRef.current) {
+      ambientAudioRef.current.pause();
     }
     setIsPlaying(false);
   }, []);
@@ -920,7 +949,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         throw new Error('Bulletin returned invalid payload');
       }
 
-      const { introSweeperUrl, turns } = data.bulletin;
+      const { introSweeperUrl, outroSweeperUrl, newsBedUrl, helicopterUrl, turns } = data.bulletin;
 
       // 1. Duck / pause current music
       if (musicAudioRef.current && isPlaying) {
@@ -943,12 +972,44 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         });
       }
 
-      // 3. Sequentially broadcast all 3 anchor turns:
-      // Turn 1: Gavin Stone (News & Weather)
-      // Turn 2: Gary Miller (Sport)
-      // Turn 3: Simon Carter (Traffic Desk)
+      const ctx = audioCtxRef.current;
+      const ambientGain = ambientGainRef.current;
+      const ambientAudio = ambientAudioRef.current;
+
+      // 3. Start News Bed in background (under Gavin Stone and Gary Miller)
+      if (newsBedUrl && ambientAudio && ambientGain && ctx) {
+        const proxyBedUrl = `/api/radio/asset-stream?url=${encodeURIComponent(newsBedUrl)}`;
+        ambientAudio.src = proxyBedUrl;
+        ambientAudio.currentTime = 0;
+        ambientAudio.loop = true;
+        ambientGain.gain.setValueAtTime(0, ctx.currentTime);
+        ambientGain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.4);
+        ambientAudio.play().catch((e) => console.warn('News bed play error:', e));
+      }
+
+      // 4. Sequentially broadcast all 3 anchor turns:
+      // Turn 1: Gavin Stone (News & Weather - over news bed)
+      // Turn 2: Gary Miller (Sport - over news bed)
+      // Turn 3: Simon Carter (Chopper 1 Traffic - transitions to helicopter audio!)
       for (const turn of turns) {
         if (!voiceAudioRef.current) continue;
+
+        const isTrafficTurn = turn.anchorId === 'simon-carter' || turn.segment === 'Traffic Desk';
+
+        // When switching to Simon Carter, transition from News Bed -> Helicopter Sound
+        if (isTrafficTurn && helicopterUrl && ambientAudio && ambientGain && ctx) {
+          ambientGain.gain.setValueAtTime(ambientGain.gain.value, ctx.currentTime);
+          ambientGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.2);
+          await new Promise((r) => setTimeout(r, 200));
+
+          const proxyChopperUrl = `/api/radio/asset-stream?url=${encodeURIComponent(helicopterUrl)}`;
+          ambientAudio.src = proxyChopperUrl;
+          ambientAudio.currentTime = 0;
+          ambientAudio.loop = true;
+          ambientGain.gain.setValueAtTime(0, ctx.currentTime);
+          ambientGain.gain.linearRampToValueAtTime(0.22, ctx.currentTime + 0.3);
+          ambientAudio.play().catch((e) => console.warn('Chopper play error:', e));
+        }
 
         setActiveSpeaker(turn.anchorName);
         setActiveTranscript(turn.text);
@@ -973,16 +1034,44 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         }
       }
 
-      // 4. Conclude bulletin and resume show music
+      // 5. Conclude bulletin turns: Smoothly fade out ambient sound over 1s and pause
+      if (ambientAudio && ambientGain && ctx) {
+        ambientGain.gain.setValueAtTime(ambientGain.gain.value, ctx.currentTime);
+        ambientGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.0);
+        setTimeout(() => {
+          ambientAudio.pause();
+          ambientAudio.currentTime = 0;
+        }, 1100);
+      }
+
       setActiveSpeaker(null);
       setActiveTranscript(null);
       isVoicePlayingRef.current = false;
+
+      // 6. Play News Outro / Stinger (replays news intro stinger after traffic finishes)
+      const outroUrl = outroSweeperUrl || introSweeperUrl;
+      if (outroUrl && musicAudioRef.current) {
+        const proxyOutroUrl = `/api/radio/asset-stream?url=${encodeURIComponent(outroUrl)}`;
+        setCurrentBroadcastItem({
+          type: 'sweeper',
+          title: 'NEWS & TRAFFIC OUTRO',
+          subtitle: 'Foul Play FM Bulletin',
+        });
+        await new Promise<void>((resolve) => {
+          if (!musicAudioRef.current) return resolve();
+          musicAudioRef.current.src = proxyOutroUrl;
+          musicAudioRef.current.onended = () => resolve();
+          musicAudioRef.current.play().catch(() => resolve());
+        });
+      }
+
       setIsBulletinPlaying(false);
       isBulletinPlayingRef.current = false;
 
+      // 7. Resume show music or show-specific sweeper
       if (musicAudioRef.current) {
         if (clockStepRef.current === 'INITIAL_SWEEPER') {
-          const sweeper = await fetchRandomR2Asset('random-sweeper');
+          const sweeper = await fetchRandomR2Asset('random-sweeper', currentShowRef.current.id);
           if (sweeper && musicAudioRef.current) {
             setCurrentBroadcastItem({
               type: 'sweeper',
@@ -1000,6 +1089,10 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       }
     } catch (err) {
       console.error('Hourly bulletin execution error:', err);
+      if (ambientAudioRef.current) {
+        ambientAudioRef.current.pause();
+        ambientAudioRef.current.currentTime = 0;
+      }
       setIsGeneratingVoice(false);
       setIsBulletinPlaying(false);
       isBulletinPlayingRef.current = false;

@@ -5,12 +5,15 @@ export interface RadioAsset {
   name: string;
   url: string;
   size: number;
-  category: 'advert' | 'sweeper' | 'stinger' | 'bed' | 'sfx';
+  category: 'advert' | 'sweeper' | 'show-sweeper' | 'stinger' | 'bed' | 'sfx';
 }
 
 export interface RadioAssetCatalog {
   adverts: RadioAsset[];
   sweepers: RadioAsset[];
+  showSweepers: RadioAsset[];
+  newsBeds: RadioAsset[];
+  trafficAmbience: RadioAsset[];
   stingers: RadioAsset[];
   beds: RadioAsset[];
   sfx: RadioAsset[];
@@ -22,9 +25,9 @@ let cachedCatalog: RadioAssetCatalog | null = null;
 const CACHE_TTL_MS = 60 * 1000;
 
 function getS3Client(): S3Client | null {
-  const accountId = process.env.R2_ACCOUNT_ID;
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const accountId = (process.env.R2_ACCOUNT_ID || '').replace(/^["']|["']$/g, '');
+  const accessKeyId = (process.env.R2_ACCESS_KEY_ID || '').replace(/^["']|["']$/g, '');
+  const secretAccessKey = (process.env.R2_SECRET_ACCESS_KEY || '').replace(/^["']|["']$/g, '');
 
   if (!accountId || !accessKeyId || !secretAccessKey) {
     return null;
@@ -55,13 +58,16 @@ export async function getR2AssetCatalog(): Promise<RadioAssetCatalog> {
     return cachedCatalog;
   }
 
-  const bucketName = process.env.R2_BUCKET_NAME || 'foul-play-fm';
-  const publicBaseUrl = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '');
+  const bucketName = (process.env.R2_BUCKET_NAME || 'foul-play-fm').replace(/^["']|["']$/g, '');
+  const publicBaseUrl = (process.env.R2_PUBLIC_URL || '').replace(/^["']|["']$/g, '').replace(/\/$/, '');
   const s3 = getS3Client();
 
   const emptyCatalog: RadioAssetCatalog = {
     adverts: [],
     sweepers: [],
+    showSweepers: [],
+    newsBeds: [],
+    trafficAmbience: [],
     stingers: [],
     beds: [],
     sfx: [],
@@ -78,6 +84,9 @@ export async function getR2AssetCatalog(): Promise<RadioAssetCatalog> {
 
     const adverts: RadioAsset[] = [];
     const sweepers: RadioAsset[] = [];
+    const showSweepers: RadioAsset[] = [];
+    const newsBeds: RadioAsset[] = [];
+    const trafficAmbience: RadioAsset[] = [];
     const stingers: RadioAsset[] = [];
     const beds: RadioAsset[] = [];
     const sfx: RadioAsset[] = [];
@@ -94,8 +103,14 @@ export async function getR2AssetCatalog(): Promise<RadioAssetCatalog> {
 
       if (key.startsWith('adverts/')) {
         adverts.push({ key, name, url, size, category: 'advert' });
+      } else if (key.startsWith('imaging/sweepers/shows/')) {
+        showSweepers.push({ key, name, url, size, category: 'show-sweeper' });
       } else if (key.startsWith('imaging/sweepers/')) {
         sweepers.push({ key, name, url, size, category: 'sweeper' });
+      } else if (key.startsWith('imaging/segments/news/beds/')) {
+        newsBeds.push({ key, name, url, size, category: 'bed' });
+      } else if (key.startsWith('imaging/segments/traffic/')) {
+        trafficAmbience.push({ key, name, url, size, category: 'sfx' });
       } else if (key.startsWith('imaging/stingers/')) {
         stingers.push({ key, name, url, size, category: 'stinger' });
       } else if (key.startsWith('imaging/beds/')) {
@@ -108,6 +123,9 @@ export async function getR2AssetCatalog(): Promise<RadioAssetCatalog> {
     cachedCatalog = {
       adverts,
       sweepers,
+      showSweepers,
+      newsBeds,
+      trafficAmbience,
       stingers,
       beds,
       sfx,
@@ -139,4 +157,52 @@ export async function getRandomSweeper(): Promise<RadioAsset | null> {
   if (catalog.sweepers.length === 0) return null;
   const idx = Math.floor(Math.random() * catalog.sweepers.length);
   return catalog.sweepers[idx];
+}
+
+/**
+ * Find a show-specific sweeper from R2 (e.g., truckers_tales_intro for truckers-tales-tacky-talk).
+ */
+export async function getShowSweeper(showId: string): Promise<RadioAsset | null> {
+  const catalog = await getR2AssetCatalog();
+  if (catalog.showSweepers.length === 0) return null;
+
+  const normalizedShowId = showId.toLowerCase().replace(/[-_]/g, '');
+  
+  // Find matching show sweeper by key or name comparison
+  const matched = catalog.showSweepers.find((s) => {
+    const normalizedKey = s.key.toLowerCase().replace(/[-_]/g, '');
+    const filename = s.key.split('/').pop()?.toLowerCase() || '';
+    
+    // Check direct substring matches
+    if (normalizedKey.includes(normalizedShowId)) return true;
+    if (filename.includes('trucker') && showId.includes('trucker')) return true;
+    if (filename.includes('tin_foil') && showId.includes('tin-foil')) return true;
+    if (filename.includes('morning') && showId.includes('morning')) return true;
+    if (filename.includes('wacky') && showId.includes('wacky')) return true;
+    if (filename.includes('midday') && showId.includes('midday')) return true;
+    if (filename.includes('rush_hour') && showId.includes('rush-hour')) return true;
+    if (filename.includes('funky') && showId.includes('funky')) return true;
+    if (filename.includes('after_dark') && showId.includes('after-dark')) return true;
+    if (filename.includes('graveyard') && showId.includes('graveyard')) return true;
+
+    return false;
+  });
+
+  return matched || null;
+}
+
+/**
+ * Retrieve the active news bed audio track.
+ */
+export async function getNewsBed(): Promise<RadioAsset | null> {
+  const catalog = await getR2AssetCatalog();
+  return catalog.newsBeds[0] || null;
+}
+
+/**
+ * Retrieve the active traffic helicopter ambience audio track.
+ */
+export async function getTrafficAmbience(): Promise<RadioAsset | null> {
+  const catalog = await getR2AssetCatalog();
+  return catalog.trafficAmbience[0] || null;
 }

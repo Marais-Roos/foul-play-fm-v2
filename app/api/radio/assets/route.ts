@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getR2AssetCatalog, getRandomAdvert, getRandomSweeper } from '@/lib/services/r2';
+import {
+  getR2AssetCatalog,
+  getRandomAdvert,
+  getRandomSweeper,
+  getShowSweeper,
+  getNewsBed,
+  getTrafficAmbience,
+} from '@/lib/services/r2';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get('type');
+  const showId = searchParams.get('showId');
 
   try {
     if (type === 'random-ad') {
@@ -12,8 +20,34 @@ export async function GET(request: Request) {
     }
 
     if (type === 'random-sweeper') {
+      if (showId) {
+        const showSweeper = await getShowSweeper(showId);
+        if (showSweeper) {
+          return NextResponse.json({ asset: showSweeper });
+        }
+      }
       const sweeper = await getRandomSweeper();
       return NextResponse.json({ asset: sweeper });
+    }
+
+    if (type === 'show-sweeper' && showId) {
+      const showSweeper = await getShowSweeper(showId);
+      if (showSweeper) {
+        return NextResponse.json({ asset: showSweeper });
+      }
+      // Fallback to general sweeper if no specific one exists
+      const sweeper = await getRandomSweeper();
+      return NextResponse.json({ asset: sweeper });
+    }
+
+    if (type === 'news-bed') {
+      const bed = await getNewsBed();
+      return NextResponse.json({ asset: bed });
+    }
+
+    if (type === 'traffic-ambience') {
+      const sfx = await getTrafficAmbience();
+      return NextResponse.json({ asset: sfx });
     }
 
     const catalog = await getR2AssetCatalog();

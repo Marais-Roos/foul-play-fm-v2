@@ -15,6 +15,9 @@ export interface HourlyBulletin {
   id: string;
   createdAt: string;
   introSweeperUrl?: string;
+  outroSweeperUrl?: string;
+  newsBedUrl?: string;
+  helicopterUrl?: string;
   turns: BulletinTurn[];
   totalDurationSeconds: number;
 }
@@ -339,10 +342,10 @@ THE ANCHORS:
    - Flow: Destroys the sports headlines. Mocks whining managers, choke-artist national teams, and excuses.
    - Tone Example: "Give me a fucking break, Gavin. Ten Hag's crying about a soft penalty while his fifty-million-pound midfield can't complete a five-yard pass to a bloke wearing the same coloured shirt. Do your job! And the Proteas—God give me strength. Cruising, cruising, and then seven wickets gone in twenty minutes like a bunch of schoolboys scared of the ball. Absolute embarrassment. Carter, tell me the highways aren't as pathetic as these athletes."
 
-3. SIMON CARTER (Traffic Desk):
-   - Style: High-caffeinated, screaming, panic-stricken traffic anchor (INSIDE THE STUDIO looking at live telemetry screens, NOT IN A HELICOPTER).
-   - Flow: Treats Gauteng traffic like an active apocalyptic battlefield. Full adrenaline, swearing at terrible drivers and highway gridlock, naming specific corridors, delays, and ramps. Ends with a breathless sign-off.
-   - Tone Example: "Gary, are you blind?! The entire grid is a catastrophe! Look at the N1 North! Buccleuch is an absolute fucking car park right now—twenty minutes dead standstill because somebody couldn't figure out how to merge! And the Double Decker on the M1? Forget it! Shut your engine off, light a cigarette, you live on the highway now! Eastbound R24 is crawling into OR Tambo, delays stacking up by the minute. Stay off the highways, take the back streets, and don't make eye contact! Back to the studio!"
+3. SIMON CARTER (Chopper 1 Traffic):
+   - Style: High-caffeinated, screaming, panic-stricken traffic reporter hovering directly over Gauteng in Chopper 1. Fighting rotor wash, turbulence, and G-forces over Buccleuch Interchange, shouting into a headset microphone over the helicopter engine noise.
+   - Flow: Treats Gauteng traffic like an active aerial war zone. Full adrenaline, swearing at terrible drivers and highway gridlock below him, naming specific corridors, delays, and ramps. Ends with a breathless sign-off ("Back to the studio!").
+   - Tone Example: "Gary, are you blind from down there?! The entire grid is a catastrophe from up here in Chopper 1! Look at the N1 North! Buccleuch is an absolute fucking car park right now—twenty minutes dead standstill because somebody couldn't figure out how to merge! And the Double Decker on the M1? Forget it! Shut your engine off, light a cigarette, you live on the highway now! Eastbound R24 is crawling into OR Tambo, delays stacking up by the minute. Stay off the highways, take the back streets, and don't make eye contact! Back to the studio!"
 
 Output STRICT JSON schema:
 [
@@ -466,13 +469,19 @@ export async function buildFullHourlyBulletin(forceRefresh: boolean = false): Pr
   );
 
   const totalDuration = synthesizedTurns.reduce((acc, t) => acc + (t.durationSeconds || 20), 0);
-  const publicBaseUrl = (process.env.R2_PUBLIC_URL || '').replace(/\/$/, '');
+  const publicBaseUrl = (process.env.R2_PUBLIC_URL || '').replace(/^["']|["']$/g, '').replace(/\/$/, '');
   const introSweeperUrl = publicBaseUrl ? `${publicBaseUrl}/imaging/segments/news/intro/News%20Intro.mp3` : undefined;
+  const outroSweeperUrl = introSweeperUrl; // Replays news intro stinger after traffic
+  const newsBedUrl = publicBaseUrl ? `${publicBaseUrl}/imaging/segments/news/beds/news-bed.mp3` : undefined;
+  const helicopterUrl = publicBaseUrl ? `${publicBaseUrl}/imaging/segments/traffic/helicopter.mp3` : undefined;
 
   const bulletin: HourlyBulletin = {
     id: `bulletin-${Date.now()}`,
     createdAt: new Date().toISOString(),
     introSweeperUrl,
+    outroSweeperUrl,
+    newsBedUrl,
+    helicopterUrl,
     turns: synthesizedTurns,
     totalDurationSeconds: totalDuration,
   };
