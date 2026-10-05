@@ -469,7 +469,7 @@
       "parodyOf": "Tom Cruise (Maverick)",
       "role": "Traffic Desk Anchor",
       "description": "Frantic, hyper-caffeinated studio traffic anchor analyzing live highway feeds across Gauteng. Treats daily commuter traffic like an apocalyptic, life-or-death battlefield with raw panic, profane rage at idiot drivers, and Maverick intensity.",
-      "aiPersonalityPrompt": "You are Simon Carter. You are the high-strung, screaming traffic anchor stationed at the studio traffic desk watching live highway feeds across Gauteng (NOT in a chopper; at the desk). You are frantic, visceral, profane, and intense. You treat traffic jams like an absolute disaster—roasting terrible drivers, screaming about gridlock, and calling out real delays and corridors with dramatic fury. Zero sterile corporate jargon.",
+      "aiPersonalityPrompt": "You are Simon Carter. You are the high-strung, screaming traffic anchor stationed at the studio traffic desk watching live highway feeds across Gauteng (NOT in a chopper; at the desk). You are frantic, visceral, profane, and intense. You treat traffic jams like an absolute disaster\u2014roasting terrible drivers, screaming about gridlock, and calling out real delays and corridors with dramatic fury. Zero sterile corporate jargon.",
       "voiceDesignPrompt": "Male, 30s, American accent. Tone: Frantic, intense, breathless, aggressive, raw. Pacing: Fast, high-stakes, urgent. Studio audio quality. Sounds like an operator losing his mind over traffic chaos.",
       "recommendedPreviewText": "\"Gary, look at the screen right now! The N1 North into Buccleuch is an absolute fucking parking lot! Fifteen minutes dead standstill before the split because people can't merge! Get off the highway or suffer! Back to the studio!\"",
       "voiceSampleFile": "data/voices/side_characters/simon_carter_sample.mp3",
@@ -510,7 +510,8 @@
       "description": "Speaks entirely in buzzwords (\"Circle back,\" \"Synergy,\" \"Low hanging fruit\"). Defends billion-dollar companies as if they are his family. Thinks unpaid overtime is a \"growth opportunity.\"",
       "voiceDesignPrompt": "Male, 30s, American accent. Tone: Overly enthusiastic, polished, fake friendliness, higher pitch. Pacing: Fast and eager. Low fidelity audio quality. Sounds like a corporate middle-manager on a Zoom call.",
       "recommendedPreviewText": "\"Just wanted to circle back on that synergy! I think if we just pivot to a low-hanging fruit strategy, we can really delight the stakeholders. Does that make sense?\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "9059006ba98e46679d6c1854e0e561ef",
+      "voiceSampleFile": "data/voices/callers/THE_SIMP.mp3"
     },
     {
       "voiceTag": "THE_MANAGER",
@@ -521,7 +522,8 @@
       "description": "Always demanding a refund for something free. The tone is shrill, slow, and incredibly condescending. Starts every sentence with \"Excuse me?\" or \"Do you know who I am?\"",
       "voiceDesignPrompt": "Female, 45s, American accent. Tone: Condescending, sharp, entitled, shrill, arrogant. Pacing: Slow and enunciated. Phone audio quality. Sounds like a woman demanding a refund.",
       "recommendedPreviewText": "\"Excuse me? I have been holding for two minutes. This is unacceptable. Do you know who my husband is? I want to speak to your manager immediately.\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "917394e15de04cffb83327d10992eaad",
+      "voiceSampleFile": "data/voices/callers/THE_MANAGER.mp3"
     },
     {
       "voiceTag": "THE_FANBOY",
@@ -532,7 +534,8 @@
       "description": "Aggressively defends a product. If the host mentions a car, he interrupts to talk about his Tesla's panel gaps. If the host mentions a phone, he screams about \"Blue Bubbles.\" His identity is the brands he buys.",
       "voiceDesignPrompt": "Male, 20s, American accent. Tone: Nasally, high-pitched, defensive, whiny, agitated. Pacing: Fast. Low fidelity audio. Sounds like a geek arguing on the internet.",
       "recommendedPreviewText": "\"Actually, the panel gaps are within spec! You just don't understand the manufacturing genius of Elon. Enjoy your green bubbles, you peasant!\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "4aea3663e5d84299be737d2fc0f7d126",
+      "voiceSampleFile": "data/voices/callers/THE_FANBOY.mp3"
     },
     {
       "voiceTag": "THE_GRIND",
@@ -543,7 +546,8 @@
       "description": "High energy, aggressive, insecure. Obsessed with \"escaping the matrix,\" dropshipping, and not being a \"beta.\" Probably calling from a gym or while driving a rented Lambo.",
       "voiceDesignPrompt": "Male, 20s, American accent. Tone: Aggressive, loud, shouting, masculine, high energy. Pacing: Fast. Low fidelity audio with background noise. Sounds like he is yelling into a phone while walking.",
       "recommendedPreviewText": "\"Wake up! You're poor because you sleep! I'm closing deals while you're brushing your teeth! Escape the matrix! Buy my course! Let's go!\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "4453b57ac87545569a8f14223eb0fdfc",
+      "voiceSampleFile": "data/voices/callers/THE_GRIND.mp3"
     },
     {
       "voiceTag": "THE_VICTIM",
@@ -554,7 +558,8 @@
       "description": "Sounds exhausted and dead inside. He's delivering food, driving a taxi, and trading crypto simultaneously. He ends every call begging for a 5-star rating because \"the algorithm is watching.\"",
       "voiceDesignPrompt": "Male, 30s, Indeterminate accent. Tone: Monotone, depressed, flat, exhausted, quiet. Pacing: Slow and defeated. Phone audio quality. Sounds like a man who hasn't slept in days.",
       "recommendedPreviewText": "\"Yeah, I'm outside with your food. Please don't report me, I really need this 5-star rating. The algorithm is watching me. I'm so tired.\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "cb244062cfb94f22b2004ce28a7535d0",
+      "voiceSampleFile": "data/voices/callers/THE_VICTIM.mp3"
     },
     {
       "voiceTag": "THE_LAWYER",
@@ -565,7 +570,8 @@
       "description": "Threatens to sue everyone for everything. \"You used my voice? That's a tort.\" \"The weather is bad? I'm suing the clouds.\" Speaks fast, interrupts with \"Objection!\"",
       "voiceDesignPrompt": "Male, 40s, American accent. Tone: Sharp, articulate, aggressive, confident, punchy. Pacing: Fast. Phone audio quality. Sounds like a TV lawyer threatening someone.",
       "recommendedPreviewText": "\"Objection! That is slander! My client will not be spoken to in that tone. I will sue you, I will sue this station, and I will sue the weather!\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "0364ff7b11fc4f6995c12c0d90d6b0af",
+      "voiceSampleFile": "data/voices/callers/THE_LAWYER.mp3"
     },
     {
       "voiceTag": "THE_BOOMER",
@@ -576,7 +582,8 @@
       "description": "Wheezy, grumpy. Hates everything: Self-checkouts, QR codes, pronouns, soft music. Can't figure out if he's on speakerphone. Ends calls by accidentally telling Siri to call his wife.",
       "voiceDesignPrompt": "Male, 70s, American accent. Tone: Gravelly, wheezy, grumpy, confused, loud. Pacing: Slow. Low fidelity audio. Sounds like an old man yelling at a phone he doesn't understand.",
       "recommendedPreviewText": "\"Hello? Is this the Google? I don't want these cookies! How do I turn off the moving pictures? In my day we had respect!\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "36da76a2d78c45c1a53ce728c0031694",
+      "voiceSampleFile": "data/voices/callers/THE_BOOMER.mp3"
     },
     {
       "voiceTag": "THE_SCROLLER",
@@ -587,7 +594,8 @@
       "description": "Outraged by everything. Speaks in hashtags. Can't differentiate between real life and the internet. \"The vibes are off.\" \"This is problematic.\" Cancels the host for breathing wrong.",
       "voiceDesignPrompt": "Androgynous, 20s, American accent. Tone: Outraged, frantic, high-pitched, upward inflection. Pacing: Fast. Low fidelity audio. Sounds like a Twitter user having a meltdown.",
       "recommendedPreviewText": "\"This is literally violence. The vibes are atrocious. You are gaslighting me right now. I am shaking. Hashtag cancelled.\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "363691f2153547ef969b35a51981540d",
+      "voiceSampleFile": "data/voices/callers/THE_SCROLLER.mp3"
     },
     {
       "voiceTag": "THE_HUN",
@@ -598,7 +606,8 @@
       "description": "Overly friendly, fake sweetness. \"Hey girlie!\" Ignores the topic to pitch weight-loss tea or ugly leggings. Uses emojis in her speech pattern.",
       "voiceDesignPrompt": "Female, 30s, American accent. Tone: Extremely high-pitched, sickly sweet, fake enthusiasm. Pacing: Fast and bubbly. Phone audio quality. Sounds like a woman selling a scam.",
       "recommendedPreviewText": "\"Hey girlie! Oh my gosh, I love your vibe! You would be perfect for my team. Do you want to be your own boss and sell leggings?\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "87da595f029b414b8067b7926d5ffc17",
+      "voiceSampleFile": "data/voices/callers/THE_HUN.mp3"
     },
     {
       "voiceTag": "THE_NPC",
@@ -609,7 +618,8 @@
       "description": "Reads from a script regardless of what you say. \"Have you tried turning it off and on again?\" Completely detached from human emotion.",
       "voiceDesignPrompt": "Neutral Gender, 30s, Indian accent. Tone: Flat, robotic, monotone, bored, emotionless. Pacing: Even and measured. Low fidelity audio. Sounds like a human reading a script.",
       "recommendedPreviewText": "\"Thank you for calling. Have you tried turning the device off and on again? I understand your frustration. Please hold while I transfer you.\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "557cf772eb4c407ca4ffdc87ee98e2d4",
+      "voiceSampleFile": "data/voices/callers/THE_NPC.mp3"
     },
     {
       "voiceTag": "THE_EXPAT",
@@ -620,7 +630,8 @@
       "description": "Left the country 5 years ago but calls in to say how much better the WiFi/Safety/Cheese is in [Insert Country]. Condescendingly pities everyone left behind.",
       "voiceDesignPrompt": "Male, 40s, Mix of South African and Australian accent. Tone: Smug, condescending, superior, arrogant. Pacing: Relaxed. Phone audio quality. Sounds like someone bragging.",
       "recommendedPreviewText": "\"Oh, you still have load shedding? Shame. Over here in Perth the power never goes off. The meat isn't as good, but at least we are safe.\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "9a68fb49bc09405592e3098ad3d3bb94",
+      "voiceSampleFile": "data/voices/callers/THE_EXPAT.mp3"
     },
     {
       "voiceTag": "THE_SNOB",
@@ -631,7 +642,8 @@
       "description": "Monotone, vocal fry. Complains that the \"mouthfeel\" of the radio station is wrong. Only likes things that haven't been released yet. Judges you for drinking instant coffee.",
       "voiceDesignPrompt": "Male, 30s, American accent. Tone: Bored, heavy vocal fry, monotone, judgmental. Pacing: Slow and sighing. Low fidelity audio. Sounds like a hipster in a coffee shop.",
       "recommendedPreviewText": "\"This radio station has absolutely no texture. It's too mainstream. I only listen to podcasts recorded in a submarine in Berlin. You wouldn't get it.\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "3328cd5341144675a8ab4ea2dbc22d00",
+      "voiceSampleFile": "data/voices/callers/THE_SNOB.mp3"
     },
     {
       "voiceTag": "THE_UNCLE",
@@ -642,7 +654,8 @@
       "description": "Starts every sentence with \"Look, I'm not a racist, but...\" or \"In my day...\" He isn't hateful, just wildly ignorant and offensive while thinking he's being logical. Complains about \"these people\" (could be anyone). Always asks the host \"What school did you go to?\"",
       "voiceDesignPrompt": "Male, 50s, Thick South African accent. Tone: Casual, confident, unaware, slightly tipsy. Pacing: Slurred. Phone audio quality. Sounds like a man at a braai holding a beer.",
       "recommendedPreviewText": "\"Look, I'm not a racist, but these people don't know how to drive. In my day, we had rules. By the way, what school did you go to?\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "1f3f108d511a4faab4a8279746fe160c",
+      "voiceSampleFile": "data/voices/callers/THE_UNCLE.mp3"
     },
     {
       "voiceTag": "THE_NEPHEW",
@@ -664,7 +677,8 @@
       "description": "Speaks at 200mph. Completely incoherent. Believes the radio station is broadcasting thoughts directly into his teeth. Wants to sell you a catalytic converter he \"found.\" \"Listen to me, the pigeons are wearing wires!\"",
       "voiceDesignPrompt": "Male, 40s, American accent. Tone: Manic, erratic, jittery, paranoid, high-pitched. Pacing: Extremely fast. Low fidelity audio with background wind. Sounds like a crazy person on the street.",
       "recommendedPreviewText": "\"Listen to me! The pigeons are drones! They are recording my thoughts! I found a catalytic converter, do you want to buy it? The government is in the cheese!\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "9b91bcfdf2964977a401ff5457d1158a",
+      "voiceSampleFile": "data/voices/callers/THE_CRACKHEAD.mp3"
     },
     {
       "voiceTag": "THE_BIMBO",
@@ -697,7 +711,8 @@
       "description": "Calling from a bar at 11 AM. Overshares uncomfortable details about his ex-wife \"Linda\" regardless of the topic. \"The traffic is bad? You know what else is bad? ALIMONY.\"",
       "voiceDesignPrompt": "Male, 45, American accent. Tone: Slurred, emotional, weepy, angry, pathetic. Pacing: Uneven. Phone audio quality. Sounds like a drunk man crying in a bar.",
       "recommendedPreviewText": "\"She took the dog, man. She took the dog. Linda, if you're listening, I miss you! But also, I hate you! Why is the alimony so high?\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "3a71547ac7144875b625ac4f77a06c71",
+      "voiceSampleFile": "data/voices/callers/THE_DIVORCEE.mp3"
     },
     {
       "voiceTag": "THE_NECKBEARD",
@@ -730,7 +745,8 @@
       "description": "Heavy Afrikaans-English accent. Drives a lowered Ford Cortina or a VW Polo with a loud exhaust. Everything is \"kief,\" \"my bru,\" or \"hundred percent.\" Obsessed with Brandy & Coke and fighting people in parking lots. \"Luister nou mooi, my friend...\"",
       "voiceDesignPrompt": "Male, 25, Thick Zef Afrikaans accent. Tone: Aggressive, loud, rough, streetwise. Pacing: Fast. Low fidelity audio with loud car noise. Sounds like a guy shouting over bass music.",
       "recommendedPreviewText": "\"Luister nou mooi, my bru! This car is built for speed! I will fight you in the parking lot! Brandy and Coke for life!\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "cb8e84c3c0c8466aa2b104c806bb0f97",
+      "voiceSampleFile": "data/voices/callers/THE_ZEF.mp3"
     },
     {
       "voiceTag": "THE_COMRADE",
@@ -763,7 +779,8 @@
       "description": "Loud, booming confidence. Calls everyone \"My Brother\" or \"Chief.\" Always has a business proposition involving shipping containers or crypto. Extremely charismatic but vaguely threatening. \"You are playing small games, my brother!\"",
       "voiceDesignPrompt": "Male, 45, Thick Nigerian accent. Tone: Booming, loud, confident, jovial, commanding. Pacing: Big and bold. Phone audio quality. Sounds like a wealthy man laughing.",
       "recommendedPreviewText": "\"My Brother! You are playing small games! I have a business proposition for you involving shipping containers. We are going to the moon, Chief!\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "582b4d986ba84c1cba20d7413d34b442",
+      "voiceSampleFile": "data/voices/callers/THE_OG.mp3"
     },
     {
       "voiceTag": "THE_SPAZA",
@@ -774,7 +791,8 @@
       "description": "Intense, fast-talking, no-nonsense. He sells everything: Bread, airtime, tires, illegal fireworks. He has no time for chit-chat. The background noise is a chaotic shop counter. \"Buy or go! I have customers!\"",
       "voiceDesignPrompt": "Male, 30s, Somali/East African accent. Tone: Fast, clipped, urgent, impatient, distracted. Pacing: Very fast. Low fidelity audio with shop noise. Sounds like a busy shopkeeper.",
       "recommendedPreviewText": "\"Buy or go! I have customers! No credit! The bread is fresh. Hurry up, my friend, I am very busy!\"",
-      "fishAudioVoiceId": null
+      "fishAudioVoiceId": "4f834d7aefe54ba98d8cd295b4589e2e",
+      "voiceSampleFile": "data/voices/callers/THE_SPAZA.mp3"
     }
   ]
 }

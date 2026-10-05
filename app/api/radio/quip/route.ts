@@ -19,6 +19,7 @@ import {
   generateSimonCarterTraffic,
   generateCallerSegment,
   generateShowBanterOrMonologue,
+  generateTripleCallerSegment,
 } from '@/lib/services/gemini';
 import { synthesizeClonedSpeech } from '@/lib/services/fish-audio';
 import { fetchTomTomGautengTraffic } from '@/lib/services/bulletin-service';
@@ -49,6 +50,43 @@ const KNOWN_CHARACTER_VOICE_IDS: Record<string, string> = {
   'gary-miller': 'db6b76e124d640ef92f2b27db5c1a2c2',
   'simon-carter': '70bf5611864f4f668074c5578d8b2cce',
   'warrant-officer-van-der-merwe': 'c208b9a1a2d94f689f508c937ea15fcb',
+  // Caller Personas
+  'the_simp': '9059006ba98e46679d6c1854e0e561ef',
+  'the-simp': '9059006ba98e46679d6c1854e0e561ef',
+  'the_manager': '917394e15de04cffb83327d10992eaad',
+  'the-manager': '917394e15de04cffb83327d10992eaad',
+  'the_fanboy': '4aea3663e5d84299be737d2fc0f7d126',
+  'the-fanboy': '4aea3663e5d84299be737d2fc0f7d126',
+  'the_grind': '4453b57ac87545569a8f14223eb0fdfc',
+  'the-grind': '4453b57ac87545569a8f14223eb0fdfc',
+  'the_victim': 'cb244062cfb94f22b2004ce28a7535d0',
+  'the-victim': 'cb244062cfb94f22b2004ce28a7535d0',
+  'the_lawyer': '0364ff7b11fc4f6995c12c0d90d6b0af',
+  'the-lawyer': '0364ff7b11fc4f6995c12c0d90d6b0af',
+  'the_boomer': '36da76a2d78c45c1a53ce728c0031694',
+  'the-boomer': '36da76a2d78c45c1a53ce728c0031694',
+  'the_scroller': '363691f2153547ef969b35a51981540d',
+  'the-scroller': '363691f2153547ef969b35a51981540d',
+  'the_hun': '87da595f029b414b8067b7926d5ffc17',
+  'the-hun': '87da595f029b414b8067b7926d5ffc17',
+  'the_npc': '557cf772eb4c407ca4ffdc87ee98e2d4',
+  'the-npc': '557cf772eb4c407ca4ffdc87ee98e2d4',
+  'the_expat': '9a68fb49bc09405592e3098ad3d3bb94',
+  'the-expat': '9a68fb49bc09405592e3098ad3d3bb94',
+  'the_snob': '3328cd5341144675a8ab4ea2dbc22d00',
+  'the-snob': '3328cd5341144675a8ab4ea2dbc22d00',
+  'the_uncle': '1f3f108d511a4faab4a8279746fe160c',
+  'the-uncle': '1f3f108d511a4faab4a8279746fe160c',
+  'the_crackhead': '9b91bcfdf2964977a401ff5457d1158a',
+  'the-crackhead': '9b91bcfdf2964977a401ff5457d1158a',
+  'the_divorcee': '3a71547ac7144875b625ac4f77a06c71',
+  'the-divorcee': '3a71547ac7144875b625ac4f77a06c71',
+  'the_zef': 'cb8e84c3c0c8466aa2b104c806bb0f97',
+  'the-zef': 'cb8e84c3c0c8466aa2b104c806bb0f97',
+  'the_og': '582b4d986ba84c1cba20d7413d34b442',
+  'the-og': '582b4d986ba84c1cba20d7413d34b442',
+  'the_spaza': '4f834d7aefe54ba98d8cd295b4589e2e',
+  'the-spaza': '4f834d7aefe54ba98d8cd295b4589e2e',
 };
 
 function resolveVoiceId(character?: { id?: string; slug?: string; name?: string; fishAudioVoiceId?: string | null } | null, fallbackId?: string): string {
@@ -200,6 +238,66 @@ export async function POST(request: NextRequest) {
         model: 's2.1-pro-free',
         format: 'mp3',
       });
+    } else if (mode === 'caller-block') {
+      // 3-Caller Call-in Segment (Clock Step 13)
+      characterRole = 'caller';
+      const hostIds = show.hostIds || [];
+      const hosts = hostIds
+        .map((id) => sanityPresenters.find((p) => p.id === id || p.id.includes(id)) || getDJById(id))
+        .filter((d): d is DJ => !!d);
+      const effectiveHosts = hosts.length > 0 ? hosts : [sanityPresenters[0] || stationBible.djs[0]];
+
+      const { turns, selectedCallers } = await generateTripleCallerSegment(
+        show,
+        effectiveHosts,
+        sanityCallers,
+        topic
+      );
+
+      // Map callers by voice tag and id for robust lookup
+      const callerMap = new Map<string, (typeof sanityCallers)[0]>();
+      sanityCallers.forEach((c) => {
+        callerMap.set(c.voiceTag.toLowerCase(), c);
+        callerMap.set(c.id.toLowerCase(), c);
+      });
+
+      // Synthesize each turn with its character's cloned voice model in batches of 3
+      const turnBuffers: Buffer[] = [];
+      const BATCH_SIZE = 3;
+      for (let i = 0; i < turns.length; i += BATCH_SIZE) {
+        const chunk = turns.slice(i, i + BATCH_SIZE);
+        const chunkBuffers = await Promise.all(
+          chunk.map(async (turn) => {
+            let voiceId: string;
+            if (turn.role === 'caller') {
+              const matchingCaller =
+                callerMap.get(turn.characterId.toLowerCase()) ||
+                selectedCallers.find(
+                  (c) =>
+                    c.voiceTag.toLowerCase() === turn.characterId.toLowerCase() ||
+                    c.archetype.toLowerCase() === turn.speaker.toLowerCase()
+                );
+              voiceId = resolveVoiceId(matchingCaller, turn.characterId);
+            } else {
+              const speakerDJ =
+                effectiveHosts.find(
+                  (h) => h.id === turn.characterId || h.name.toLowerCase().includes(turn.speaker.toLowerCase())
+                ) || effectiveHosts[0];
+              voiceId = resolveVoiceId(speakerDJ, turn.characterId);
+            }
+
+            return synthesizeClonedSpeech(turn.text, voiceId, {
+              model: 's2.1-pro-free',
+              format: 'mp3',
+            });
+          })
+        );
+        turnBuffers.push(...chunkBuffers);
+      }
+
+      audioBuffer = Buffer.concat(turnBuffers);
+      speakerName = `Live Callers (${selectedCallers.map((c) => c.archetype).join(', ')})`;
+      spokenText = turns.map((t) => `${t.speaker}: ${t.text}`).join('\n');
     } else {
       // 3. Show-level trigger: Multi-host Banter or Solo Host Monologue
       characterRole = 'host';

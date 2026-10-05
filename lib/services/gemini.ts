@@ -517,3 +517,109 @@ The caller calls in to give their unhinged perspective. Make it authentically hi
     };
   }
 }
+
+/**
+ * Generates an unhinged 3-caller radio phone-in segment.
+ * The host(s) take three calls, each with a 6-turn conversation (18 turns total).
+ */
+export async function generateTripleCallerSegment(
+  show: Show,
+  hosts: DJ[],
+  callers: CallerPersona[],
+  topic?: string
+): Promise<{ turns: DialogueTurn[]; selectedCallers: CallerPersona[] }> {
+  // Select 3 callers, prioritizing those with cloned Fish Audio voice IDs
+  const readyCallers = callers.filter((c) => !!c.fishAudioVoiceId);
+  const pool = readyCallers.length >= 3 ? readyCallers : callers;
+  const shuffled = [...pool].sort(() => 0.5 - Math.random());
+  const selectedCallers = shuffled.slice(0, 3);
+  const [c1, c2, c3] = selectedCallers;
+
+  const hostDesc = hosts
+    .map((h) => `- ${h.name} (${h.id}): Parody of ${h.parodyOf}. Personality: ${h.personality}`)
+    .join('\n');
+
+  const topicText = topic || `The current on-air vibe on '${show.title}': ${show.vibe}. Unfiltered Gauteng listeners calling in to air absurd complaints and wild theories.`;
+
+  const systemInstruction = `You are the lead comedy writer for '${show.title}' on Foul Play FM, a satirical radio station in Gauteng, South Africa inspired by GTA shock jock radio.
+
+THE HOST(S):
+${hostDesc}
+
+THE 3 ON-AIR CALLERS:
+1. ${c1.archetype} (${c1.voiceTag}): Satirizing ${c1.targetOfSatire}. Context: ${c1.aiContextStrategy}. Bio: ${c1.description}
+2. ${c2.archetype} (${c2.voiceTag}): Satirizing ${c2.targetOfSatire}. Context: ${c2.aiContextStrategy}. Bio: ${c2.description}
+3. ${c3.archetype} (${c3.voiceTag}): Satirizing ${c3.targetOfSatire}. Context: ${c3.aiContextStrategy}. Bio: ${c3.description}
+
+STRUCTURE:
+You must write 3 consecutive, back-to-back phone calls.
+For EACH of the 3 calls, generate EXACTLY 6 turns of rapid-fire dialogue:
+- Turn 1 (Host): Picks up line, announces caller (e.g. "Line 1, you're on with Tony Tatum, speak!").
+- Turn 2 (Caller): Caller delivers their absurd, unhinged grievance or hot-take in their signature voice.
+- Turn 3 (Host): Host reacts with shock, mockery, or aggressive disbelief.
+- Turn 4 (Caller): Caller doubles down, yelling buzzwords or citing absurd logic.
+- Turn 5 (Host): Host delivers a ruthless comedic roast or punchline.
+- Turn 6 (Host): Host cuts the caller off and hangs up (e.g. "Cut the line!", "Next caller!").
+
+Total: EXACTLY 18 turns (Call 1 = 6 turns, Call 2 = 6 turns, Call 3 = 6 turns).
+Keep each line short, punchy (1-2 sentences, max 20 words per line).
+Keep the pacing fast, aggressive, and hilarious. Authentic South African cultural touches (Woolies, Sandton, load shedding, bakkie, braai) are encouraged where appropriate.
+DO NOT include markdown code fences, stage directions, or sound effects in parentheses.
+
+OUTPUT STRICTLY AS A JSON ARRAY WITH THIS SCHEMA:
+[
+  {"role": "host", "speaker": "${hosts[0].name.split(' ')[0]}", "characterId": "${hosts[0].id}", "text": "..."},
+  {"role": "caller", "speaker": "${c1.archetype}", "characterId": "${c1.voiceTag}", "text": "..."}
+]
+`;
+
+  try {
+    const raw = await callGemini(systemInstruction, `The topic is: "${topicText}". Write the 3 phone calls now.`);
+    const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+    const parsed: Array<{ role: 'host' | 'caller'; speaker: string; characterId: string; text: string }> = JSON.parse(cleaned);
+
+    if (Array.isArray(parsed) && parsed.length >= 6) {
+      const turns: DialogueTurn[] = parsed.map((t) => ({
+        role: t.role,
+        speaker: t.speaker,
+        characterId: t.characterId,
+        text: sanitizeVoiceScript(t.text),
+      }));
+      return { turns, selectedCallers };
+    }
+  } catch (err) {
+    console.warn('Gemini 3-caller generation failed, using lore fallback:', err);
+  }
+
+  // High quality offline fallback with exactly 3 calls x 6 turns = 18 turns
+  const host = hosts[0];
+  const hostShort = host.name.split(' ')[0];
+  const fallbackTurns: DialogueTurn[] = [
+    // Call 1
+    { role: 'host', speaker: hostShort, characterId: host.id, text: `Line one, you're on air with ${host.name} on Foul Play FM. Make it snappy!` },
+    { role: 'caller', speaker: c1.archetype, characterId: c1.voiceTag, text: c1.recommendedPreviewText || `I need to address the synergy of this broadcast right now.` },
+    { role: 'host', speaker: hostShort, characterId: host.id, text: `Did you seriously dial a radio hotline to say that? What is wrong with you?` },
+    { role: 'caller', speaker: c1.archetype, characterId: c1.voiceTag, text: `It's about core competencies and paradigm shifts! You just don't get the vision!` },
+    { role: 'host', speaker: hostShort, characterId: host.id, text: `The only shift happening here is me shifting you straight off my frequency.` },
+    { role: 'host', speaker: hostShort, characterId: host.id, text: `Cut line one! Next caller!` },
+
+    // Call 2
+    { role: 'host', speaker: hostShort, characterId: host.id, text: `Line two, you're live. Don't waste my time like the last clown.` },
+    { role: 'caller', speaker: c2.archetype, characterId: c2.voiceTag, text: c2.recommendedPreviewText || `Excuse me? I have been holding for ten minutes and this is completely unacceptable!` },
+    { role: 'host', speaker: hostShort, characterId: host.id, text: `Lady, nobody forced you to hold. Why are you calling a shock jock station?` },
+    { role: 'caller', speaker: c2.archetype, characterId: c2.voiceTag, text: `I want to speak to the station manager immediately! Do you know who my husband is?` },
+    { role: 'host', speaker: hostShort, characterId: host.id, text: `Even your husband doesn't want to know who he is after hearing your voice.` },
+    { role: 'host', speaker: hostShort, characterId: host.id, text: `Goodbye! Line two is terminated. Line three, talk to me!` },
+
+    // Call 3
+    { role: 'host', speaker: hostShort, characterId: host.id, text: `Line three, you've got thirty seconds to impress me.` },
+    { role: 'caller', speaker: c3.archetype, characterId: c3.voiceTag, text: c3.recommendedPreviewText || `Listen here my bru, the government is putting microchips in the biltong!` },
+    { role: 'host', speaker: hostShort, characterId: host.id, text: `In the biltong? Are you listening to the nonsense coming out of your mouth?` },
+    { role: 'caller', speaker: c3.archetype, characterId: c3.voiceTag, text: `I did my own research on WhatsApp groups! Wake up, sheeple!` },
+    { role: 'host', speaker: hostShort, characterId: host.id, text: `If your brain had a speed limit, you'd be getting ticketed for standing still.` },
+    { role: 'host', speaker: hostShort, characterId: host.id, text: `Dump that call! That's enough democracy for one hour. Let's get back to the music!` },
+  ];
+
+  return { turns: fallbackTurns, selectedCallers };
+}
+

@@ -31,7 +31,11 @@ export type ClockStep =
   | 'SONG_3'                 // 8a. Song 3
   | 'SONG_4'                 // 8b. Song 4 (background pre-gen for song reaction)
   | 'SONG_DISCUSSION'        // 9. Song discussion / reaction
-  | 'FINAL_AD';              // 10. Commercial advert (R2)
+  | 'FINAL_AD'               // 10. Commercial advert (R2)
+  | 'POST_AD_SWEEPER'        // 11a. Sweeper after final ad
+  | 'SONG_5'                 // 11b. Song 5 (background pre-gen for caller segment)
+  | 'CALLER_SWEEP'           // 12. Station sweep before caller segment
+  | 'CALLER_SEGMENT';        // 13. Quick caller segment (3 calls, 6-turn conversations)
 
 interface AudioContextType {
   isPlaying: boolean;
@@ -191,7 +195,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
   // Helper to trigger background AI voice pre-generation
   const triggerPreloadBanter = useCallback((params: {
-    mode: 'intro' | 'reaction' | 'mid-show';
+    mode: 'intro' | 'reaction' | 'mid-show' | 'caller-block';
     isFirstCycle?: boolean;
     songName?: string;
     artist?: string;
@@ -534,7 +538,94 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       }
 
       case 'FINAL_AD': {
-        // Step 10: Final Ad finished -> Cycle Complete! Loop back to INITIAL_SWEEPER
+        // Step 10: Final Ad finished -> transition to POST_AD_SWEEPER (Step 11a)
+        clockStepRef.current = 'POST_AD_SWEEPER';
+        setClockStep('POST_AD_SWEEPER');
+        const sweeper = await fetchRandomR2Asset('random-sweeper', show.id);
+        if (sweeper && musicAudioRef.current) {
+          setCurrentBroadcastItem({
+            type: 'sweeper',
+            title: 'STATION SWEEPER',
+            subtitle: sweeper.name,
+          });
+          musicAudioRef.current.src = sweeper.url;
+          musicAudioRef.current.play().catch(() => advanceBroadcastClock());
+        } else {
+          advanceBroadcastClock();
+        }
+        break;
+      }
+
+      case 'POST_AD_SWEEPER': {
+        // Step 11a: Sweeper finished -> transition to SONG_5 (Step 11b)
+        clockStepRef.current = 'SONG_5';
+        setClockStep('SONG_5');
+        advanceTrackIndex();
+        playSongAtCurrentIndex();
+
+        // Background pre-generation: Queue 3-caller phone-in segment (6 turns each)
+        triggerPreloadBanter({
+          showId: show.id,
+          mode: 'caller-block',
+        });
+        break;
+      }
+
+      case 'SONG_5': {
+        // Step 11b: SONG_5 finished -> transition to CALLER_SWEEP (Step 12)
+        clockStepRef.current = 'CALLER_SWEEP';
+        setClockStep('CALLER_SWEEP');
+        const sweeper = await fetchRandomR2Asset('random-sweeper', show.id);
+        if (sweeper && musicAudioRef.current) {
+          setCurrentBroadcastItem({
+            type: 'sweeper',
+            title: 'CALLER LINE SWEEPER',
+            subtitle: sweeper.name,
+          });
+          musicAudioRef.current.src = sweeper.url;
+          musicAudioRef.current.play().catch(() => advanceBroadcastClock());
+        } else {
+          advanceBroadcastClock();
+        }
+        break;
+      }
+
+      case 'CALLER_SWEEP': {
+        // Step 12: Caller line sweep finished -> transition to CALLER_SEGMENT (Step 13)
+        clockStepRef.current = 'CALLER_SEGMENT';
+        setClockStep('CALLER_SEGMENT');
+        if (musicAudioRef.current) musicAudioRef.current.pause();
+
+        let voiceItem = prebufferedVoiceRef.current;
+        if (!voiceItem && prebufferPromiseRef.current) {
+          setIsGeneratingVoice(true);
+          voiceItem = await Promise.race([
+            prebufferPromiseRef.current,
+            new Promise<null>((res) => setTimeout(() => res(null), 5000)),
+          ]);
+          setIsGeneratingVoice(false);
+        }
+
+        if (voiceItem && voiceAudioRef.current) {
+          voiceAudioRef.current.src = voiceItem.audioSrc;
+          voiceAudioRef.current.currentTime = 0;
+          setActiveSpeaker(voiceItem.speaker);
+          setActiveTranscript(voiceItem.text);
+          isVoicePlayingRef.current = true;
+          setCurrentBroadcastItem({
+            type: 'banter',
+            title: 'LIVE CALLER PHONE-IN',
+            subtitle: `${show.title} • 3 On-Air Calls`,
+          });
+          voiceAudioRef.current.play().catch(() => advanceBroadcastClock());
+        } else {
+          advanceBroadcastClock();
+        }
+        break;
+      }
+
+      case 'CALLER_SEGMENT': {
+        // Step 13: Caller segment finished -> Cycle Complete! Loop back to INITIAL_SWEEPER
         cycleCountRef.current += 1;
         setCycleCount(cycleCountRef.current);
         advanceTrackIndex();
