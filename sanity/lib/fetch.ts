@@ -11,6 +11,9 @@ export interface SanityShow {
   vibe?: string;
   streamUrl?: string;
   coverImage?: any;
+  imageWithOverlay?: any;
+  imageWithoutOverlay?: any;
+  studioImage?: any;
   hosts?: Array<{
     _id: string;
     name: string;
@@ -67,6 +70,9 @@ export async function fetchShows(): Promise<SanityShow[]> {
     vibe: s.vibe,
     streamUrl: undefined,
     coverImage: null,
+    imageWithOverlay: null,
+    imageWithoutOverlay: null,
+    studioImage: null,
     hosts: s.hostIds.map((hid) => {
       const dj = stationBible.djs.find((d) => d.id === hid);
       return {

@@ -14,7 +14,7 @@ import { PresentersView } from "@/components/radio/presenters-view";
 import { LiveView } from "@/components/radio/live-view";
 import { useSanityStation } from "@/lib/hooks/useSanityStation";
 import { urlForImage } from "@/sanity/lib/image";
-import { DEFAULT_SHOW_IMAGES } from "@/lib/data/station";
+import { DEFAULT_SHOW_IMAGES, findMatchingShow } from "@/lib/data/station";
 
 function StationMainContent() {
   const [activeTab, setActiveTab] = useState("home");
@@ -51,24 +51,34 @@ function StationMainContent() {
   // Sync Sanity show metadata to currentShow when loaded
   useEffect(() => {
     if (shows.length > 0) {
-      const match = shows.find(
-        (s: any) =>
-          s._id === currentShow.id ||
-          s.id === currentShow.id ||
-          s.slug === currentShow.id ||
-          s.title === currentShow.title
-      );
+      const match =
+        findMatchingShow(currentShow.id, currentShow.title, shows) ||
+        shows.find(
+          (s: any) =>
+            s._id === currentShow.id ||
+            s.id === currentShow.id ||
+            s.slug === currentShow.id ||
+            s.title === currentShow.title
+        );
       if (match) {
-        const coverImageUrl = match.coverImage
-          ? urlForImage(match.coverImage)?.width(800).height(800).fit("crop").url()
-          : (match.imageUrl || DEFAULT_SHOW_IMAGES[currentShow.id]);
+        const rawCoverImage = match.imageWithOverlay || match.coverImage || match.imageWithoutOverlay;
+        const coverImageUrl = rawCoverImage
+          ? urlForImage(rawCoverImage)?.width(800).height(800).fit("crop").url()
+          : (match.imageUrl || DEFAULT_SHOW_IMAGES[currentShow.id] || DEFAULT_SHOW_IMAGES['truckers-tales-tacky-talk']);
+        const hostIds = match.hosts?.map((h: any) => h.slug || h._id) || [];
+        const hostNames = match.hosts?.map((h: any) => h.name).join(' & ');
         updateShowMetadata({
           title: match.title || currentShow.title,
           description: match.description || currentShow.description,
           vibe: match.vibe || currentShow.vibe,
           jellyfinPlaylistId: match.jellyfinPlaylistId || currentShow.jellyfinPlaylistId,
-          coverImage: match.coverImage,
+          coverImage: rawCoverImage,
+          imageWithOverlay: match.imageWithOverlay || match.coverImage,
+          imageWithoutOverlay: match.imageWithoutOverlay,
+          studioImage: match.studioImage,
           imageUrl: coverImageUrl || currentShow.imageUrl,
+          hostIds: hostIds.length > 0 ? hostIds : currentShow.hostIds,
+          hostNames: hostNames || currentShow.hostNames,
         });
       }
     }

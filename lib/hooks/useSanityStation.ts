@@ -15,6 +15,9 @@ export interface SanityShowData {
   vibe?: string;
   jellyfinPlaylistId?: string;
   coverImage?: any;
+  imageWithOverlay?: any;
+  imageWithoutOverlay?: any;
+  studioImage?: any;
   hosts?: Array<{
     _id: string;
     name: string;

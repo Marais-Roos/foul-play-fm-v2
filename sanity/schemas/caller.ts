@@ -43,6 +43,27 @@ export default defineType({
       rows: 2,
     }),
     defineField({
+      name: 'gender',
+      title: 'Gender Identity',
+      description: 'Used for switchboard caller name selection and on-air host pronouns.',
+      type: 'string',
+      options: {
+        list: [
+          { title: 'Male', value: 'male' },
+          { title: 'Female', value: 'female' },
+          { title: 'Neutral / Androgynous', value: 'neutral' },
+        ],
+        layout: 'radio',
+      },
+      initialValue: 'male',
+    }),
+    defineField({
+      name: 'callerNames',
+      title: 'Caller Names Pool (Optional)',
+      description: 'Comma-separated list of first names for this caller (e.g. "Brenda, Cheryl, Karen, Marinda"). Overrides built-in defaults.',
+      type: 'string',
+    }),
+    defineField({
       name: 'fishAudioVoiceId',
       title: 'Fish Audio Voice ID',
       description: 'Cloned voice model ID from Fish Audio.',

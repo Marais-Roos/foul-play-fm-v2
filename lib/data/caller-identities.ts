@@ -120,7 +120,7 @@ export const PERSONA_IDENTITIES: Record<string, PersonaIdentityDefinition> = {
   THE_OG: {
     voiceTag: 'THE_OG',
     archetype: 'The Nigerian Big Man',
-    names: ['Emeka', 'Chidi', 'Chief Obi', 'Kingsley', 'Prince', 'Blessing'],
+    names: ['Emeka', 'Chidi', 'Chief Obi', 'Kingsley', 'Prince', 'Femi'],
     suburbs: ['Sunnyside', 'Midrand', 'Sandton', 'Randburg', 'Kempton Park'],
     sampleTopics: [
       'My brother! Tell your listeners to stop complaining about fuel prices! Money is everywhere if your mind is big!',
@@ -312,32 +312,32 @@ export const PERSONA_IDENTITIES: Record<string, PersonaIdentityDefinition> = {
   THE_DIVORCEE: {
     voiceTag: 'THE_DIVORCEE',
     archetype: 'The Bitter Ex',
-    names: ['Tanya', 'Sharon', 'Debbie', 'Vanessa', 'Lizelle', 'Renette'],
+    names: ['Dave', 'Gary', 'Mark', 'Wayne', 'Braam', 'Dirk', 'Craig', 'Steve'],
     suburbs: ['Constantia Kloof', 'Bedfordview', 'Pretoria East', 'Northcliff', 'Helderkruin'],
     sampleTopics: [
-      'I just saw my ex-husband driving past the gym with his twenty-two-year-old dental receptionist girlfriend!',
-      'Can we discuss why men under fifty are completely emotionally stunted narcissists who deserve zero custody?!',
-      'My ex tried to deduct his country club golf membership from my spousal maintenance payment this month!',
+      'Linda took the golden retriever, man. She took the dog and the caravan! Why is my maintenance seventy percent of my salary?!',
+      'I am sitting at the sports bar at eleven in the morning because my ex-wife’s new personal trainer is driving my Fortuner!',
+      'Can we discuss the family court? Linda gets the beach house in Hermanus and I get a one-bedroom flat above a dry cleaner!',
     ],
     sampleEscalations: [
-      'That is not the point! He is using the BMW I specifically cursed in our mediation settlement! He has zero remorse!',
-      'I hired an aerial drone to follow him to his mistress Pilates studio! I will burn his pension to the ground!',
-      'My therapist says I need to channel my rage, and my rage says his golf clubs belong at the bottom of the dam!',
+      'Linda, if you are listening on the car radio, bring back my braai tongs! She took the dog, the caravan, and the tongs, man!',
+      'The magistrate told me to find closure! Find closure where?! I sleep on an inflatable mattress in Boksburg!',
+      'I poured half my retirement pension into her organic beeswax candle business and now she is engaged to a twenty-four-year-old named Tristan!',
     ],
     sampleCutoffs: [
-      "I'm calling his tax auditor right now, just watch m—",
-      "He'll never see that golden retriever again, I swore on my moth—",
-      'My attorney Advocate Deon is already filing the affidav—',
+      "Linda, I still have your winter coat in the boot of the Corsa, please ju—",
+      "Tell Linda I am willing to negotiate on the timeshare in Bal—",
+      "Bartender, pour me another double brandy before they cut m—",
     ],
     hostReacts: [
-      'Sharon, didn’t you finalize that divorce three years ago and take both his beach houses and the golden retriever?',
-      "Debbie, you've been on our show four times this month talking about the same ex-husband. Let it go!",
-      'Tanya, the golf club fees are between you and your divorce attorney, not a shock jock radio host!',
+      'Dave, it is eleven in the morning on a Tuesday. Why are you calling a shock jock radio station from a sports bar?',
+      "Gary, Linda finalized that divorce four years ago and you are still tracking her Pilates schedule. Let it go, man!",
+      'Wayne, this show is about load shedding and potholes, not your spousal maintenance dispute!',
     ],
     hostRoasts: [
-      'Have another glass of Sauvignon Blanc and let the poor guy drive his BMW in peace. Goodbye, Sharon!',
-      'Channel your rage into getting a hobby that does not involve aviation surveillance. Line dropped!',
-      'Throw the clubs in the dam, just throw yourself off my airwaves first. Next caller!',
+      'Drink a glass of water, pay your alimony, and leave the poor woman alone. Cut the line!',
+      'The only thing lower than your credit score is your self-respect. Line dumped!',
+      'Go adopt another dog and stop crying into our switchboard. Next caller!',
     ],
   },
 
@@ -797,12 +797,110 @@ export function getRandomCallerLines(count: number = 3): number[] {
 }
 
 /**
+ * Detects caller gender based on explicit persona gender, voice design prompt,
+ * description, or archetype.
+ */
+export function detectCallerGender(caller: CallerPersona): 'male' | 'female' | 'neutral' {
+  if (caller.gender) {
+    const g = caller.gender.toLowerCase().trim();
+    if (g.includes('female') || g.includes('woman')) return 'female';
+    if (g.includes('male') || g.includes('man')) return 'male';
+    if (g.includes('neutral') || g.includes('androgynous')) return 'neutral';
+  }
+
+  const textToScan = [
+    caller.voiceDesignPrompt,
+    caller.voicePrompt,
+    caller.description,
+    caller.aiContextStrategy,
+    caller.archetype,
+  ].filter(Boolean).join(' ');
+
+  // Word-boundary checks to distinguish 'female' from 'male'
+  if (/\b(female|woman|women|lady|karen|bimbo|tannie|girlie|her|she)\b/i.test(textToScan)) {
+    return 'female';
+  }
+  if (/\b(male|man|men|guy|boet|bro|uncle|nephew|him|he|his)\b/i.test(textToScan)) {
+    return 'male';
+  }
+  return 'neutral';
+}
+
+const DEFAULT_FEMALE_NAMES = [
+  'Brenda', 'Cheryl', 'Karen', 'Marinda', 'Candice', 'Monique',
+  'Chantal', 'Annelize', 'Jessica', 'Kaylee', 'Tannie Magda', 'Tanith', 'Bianca', 'Sharon'
+];
+
+const DEFAULT_MALE_NAMES = [
+  'Jaco', 'Ruan', 'Kyle', 'Wayne', 'Shane', 'Johan',
+  'Frikkie', 'Sipho', 'Thabo', 'Emeka', 'Dave', 'Gary', 'Franco', 'Dewald'
+];
+
+const DEFAULT_NEUTRAL_NAMES = [
+  'Jordan', 'Alex', 'Taylor', 'Morgan', 'Sam', 'Cameron', 'Keagan', 'Aiden'
+];
+
+/**
+ * Resolves persona definition for a caller persona, normalizing slugs and voice tags.
+ * Falls back to gender-appropriate persona if unknown.
+ */
+export function getPersonaIdentity(caller: CallerPersona): PersonaIdentityDefinition {
+  const rawTag = caller.voiceTag || caller.id || '';
+  const normalizedTag = rawTag.toUpperCase().replace(/[-\s]/g, '_');
+
+  if (PERSONA_IDENTITIES[normalizedTag]) {
+    return PERSONA_IDENTITIES[normalizedTag];
+  }
+
+  // Check by voiceTag equality or substring
+  for (const [key, def] of Object.entries(PERSONA_IDENTITIES)) {
+    if (key === normalizedTag || normalizedTag.includes(key) || key.includes(normalizedTag)) {
+      return def;
+    }
+  }
+
+  // Match by archetype
+  if (caller.archetype) {
+    const archMatch = Object.values(PERSONA_IDENTITIES).find(
+      (p) => p.archetype.toLowerCase() === caller.archetype.toLowerCase()
+    );
+    if (archMatch) return archMatch;
+  }
+
+  // Gender-aware fallback so female callers NEVER get assigned male boet names
+  const gender = detectCallerGender(caller);
+  if (gender === 'female') {
+    return PERSONA_IDENTITIES.THE_MANAGER; // Female fallback
+  }
+  return PERSONA_IDENTITIES.THE_ZEF; // Male fallback
+}
+
+/**
  * Assigns a culturally fitting South African persona identity (name, suburb, line).
+ * Strictly guarantees gender consistency between the caller's persona/voice and their assigned name.
  */
 export function assignCallerIdentity(caller: CallerPersona, line: number): AssignedCallerIdentity {
-  const meta = PERSONA_IDENTITIES[caller.voiceTag] || PERSONA_IDENTITIES.THE_ZEF;
-  const name = meta.names[Math.floor(Math.random() * meta.names.length)];
+  const meta = getPersonaIdentity(caller);
+  const gender = detectCallerGender(caller);
+
+  // 1. If explicit custom names are provided (e.g. from Sanity CMS callerNames)
+  if (caller.names && caller.names.length > 0) {
+    const name = caller.names[Math.floor(Math.random() * caller.names.length)];
+    const suburb = meta.suburbs[Math.floor(Math.random() * meta.suburbs.length)];
+    return { name, suburb, line, caller };
+  }
+
+  // 2. Determine name pool strictly matching the caller's gender
+  let namesPool = meta.names;
+  if (!namesPool || namesPool.length === 0) {
+    if (gender === 'female') namesPool = DEFAULT_FEMALE_NAMES;
+    else if (gender === 'male') namesPool = DEFAULT_MALE_NAMES;
+    else namesPool = DEFAULT_NEUTRAL_NAMES;
+  }
+
+  const name = namesPool[Math.floor(Math.random() * namesPool.length)];
   const suburb = meta.suburbs[Math.floor(Math.random() * meta.suburbs.length)];
+
   return {
     name,
     suburb,
@@ -817,10 +915,15 @@ export function assignCallerIdentity(caller: CallerPersona, line: number): Assig
  */
 export function generateSingleCallFallback(
   host: DJ,
-  identity: AssignedCallerIdentity
+  identity: AssignedCallerIdentity,
+  coHost?: DJ,
+  leadHost?: DJ
 ): DialogueTurn[] {
-  const meta = PERSONA_IDENTITIES[identity.caller.voiceTag] || PERSONA_IDENTITIES.THE_ZEF;
-  const hostShort = host.name.split(' ')[0];
+  const primaryHost = leadHost || host;
+  const secondaryHost = coHost || host;
+  const primaryShort = primaryHost.name.split(' ')[0];
+  const secondaryShort = secondaryHost.name.split(' ')[0];
+  const meta = getPersonaIdentity(identity.caller);
 
   const topic = meta.sampleTopics[Math.floor(Math.random() * meta.sampleTopics.length)];
   const escalation = meta.sampleEscalations[Math.floor(Math.random() * meta.sampleEscalations.length)];
@@ -831,12 +934,12 @@ export function generateSingleCallFallback(
   const hostIntro = `We've got ${identity.name} from ${identity.suburb} on line ${identity.line}. ${identity.name}... what's up?`;
 
   return [
-    // Turn 1 (Host): Picks up line, introduces caller with name, suburb, and line number
+    // Turn 1 (Primary Host): Picks up line, introduces caller with name, suburb, and line number
     {
       role: 'host',
-      speaker: hostShort,
-      characterId: host.id,
-      voiceId: host.fishAudioVoiceId || undefined,
+      speaker: primaryShort,
+      characterId: primaryHost.id,
+      voiceId: primaryHost.fishAudioVoiceId || undefined,
       text: hostIntro,
     },
     // Turn 2 (Caller): Signature unhinged grievance / hot take
@@ -847,12 +950,12 @@ export function generateSingleCallFallback(
       voiceId: identity.caller.fishAudioVoiceId || undefined,
       text: topic,
     },
-    // Turn 3 (Host): Shock, pushback, or sarcastic interrogation
+    // Turn 3 (Secondary Host if co-host present, else Primary): Shock, pushback, or sarcastic interrogation
     {
       role: 'host',
-      speaker: hostShort,
-      characterId: host.id,
-      voiceId: host.fishAudioVoiceId || undefined,
+      speaker: secondaryShort,
+      characterId: secondaryHost.id,
+      voiceId: secondaryHost.fishAudioVoiceId || undefined,
       text: hostReact,
     },
     // Turn 4 (Caller): Doubles down with manic conviction or catchphrase
@@ -863,12 +966,12 @@ export function generateSingleCallFallback(
       voiceId: identity.caller.fishAudioVoiceId || undefined,
       text: escalation,
     },
-    // Turn 5 (Host): Ruthless comedic punchline roast and dumps line
+    // Turn 5 (Primary Host): Ruthless comedic punchline roast and dumps line
     {
       role: 'host',
-      speaker: hostShort,
-      characterId: host.id,
-      voiceId: host.fishAudioVoiceId || undefined,
+      speaker: primaryShort,
+      characterId: primaryHost.id,
+      voiceId: primaryHost.fishAudioVoiceId || undefined,
       text: hostRoast,
     },
     // Turn 6 (Caller): Frantic parting shout/protest cut off by line dump

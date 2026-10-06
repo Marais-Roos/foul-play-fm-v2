@@ -41,11 +41,12 @@ export function AudioPlayerBar() {
   }, [currentShow, now]);
 
   // Robust artwork thumbnail resolution:
-  // 1. Sanity coverImage (uploaded crop)
+  // 1. Sanity imageWithOverlay / coverImage / imageWithoutOverlay (uploaded crop)
   // 2. Direct show imageUrl property
   // 3. Official station CDN image fallback by show id/slug
+  const activeImage = currentShow.imageWithOverlay || currentShow.coverImage || currentShow.imageWithoutOverlay;
   const thumbnailSrc =
-    (currentShow.coverImage ? urlForImage(currentShow.coverImage)?.width(160).height(160).fit("crop").url() : null) ||
+    (activeImage ? urlForImage(activeImage)?.width(160).height(160).fit("crop").url() : null) ||
     currentShow.imageUrl ||
     DEFAULT_SHOW_IMAGES[currentShow.id] ||
     null;

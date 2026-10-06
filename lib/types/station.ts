@@ -41,6 +41,9 @@ export interface Show {
   description?: string;
   jellyfinPlaylistId?: string;
   coverImage?: any;
+  imageWithOverlay?: any;
+  imageWithoutOverlay?: any;
+  studioImage?: any;
   imageUrl?: string;
   sideCharacters?: SideCharacter[];
   callers?: CallerPersona[];
@@ -83,6 +86,8 @@ export interface CallerPersona {
   recommendedPreviewText: string;
   fishAudioVoiceId: string | null;
   voicePrompt?: string;
+  gender?: 'male' | 'female' | 'neutral' | string;
+  names?: string[];
 }
 
 export interface StationBible {

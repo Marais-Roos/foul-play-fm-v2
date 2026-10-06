@@ -52,8 +52,27 @@ export default defineType({
       type: 'text',
     }),
     defineField({
-      name: 'coverImage',
-      title: 'Cover Image',
+      name: 'imageWithOverlay',
+      title: 'Image with Overlay',
+      description: 'Show promotional cover artwork with branding and title overlay.',
+      type: 'image',
+      options: {
+        hotspot: true,
+      },
+    }),
+    defineField({
+      name: 'imageWithoutOverlay',
+      title: 'Image without Overlay',
+      description: 'Clean show/host artwork without graphic overlays or titles.',
+      type: 'image',
+      options: {
+        hotspot: true,
+      },
+    }),
+    defineField({
+      name: 'studioImage',
+      title: 'Studio Image',
+      description: 'Studio booth or broadcast environment image for this show.',
       type: 'image',
       options: {
         hotspot: true,
@@ -75,8 +94,16 @@ export default defineType({
   preview: {
     select: {
       title: 'title',
-      subtitle: 'timeSlot', // Will show the hour in the list
-      media: 'coverImage',
+      subtitle: 'timeSlot',
+      media: 'imageWithOverlay',
+      fallbackMedia: 'coverImage',
+    },
+    prepare({ title, subtitle, media, fallbackMedia }) {
+      return {
+        title,
+        subtitle: subtitle !== undefined ? `${subtitle.toString().padStart(2, '0')}:00` : undefined,
+        media: media || fallbackMedia,
+      };
     },
   },
 });

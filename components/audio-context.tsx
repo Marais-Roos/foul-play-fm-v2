@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { Show, DJ } from "@/lib/types/station";
-import { stationBible, getCurrentShow, getDJById, getSideCharacterById } from "@/lib/data/station";
+import { stationBible, getCurrentShow, getDJById, getSideCharacterById, getStationTime } from "@/lib/data/station";
 import { JellyfinTrack } from "@/lib/services/jellyfin";
 import { HourlyBulletin } from "@/lib/services/bulletin-service";
 
@@ -293,7 +293,8 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   // Helper to record track start in persistent broadcast history
   const recordSongStart = useCallback((track: JellyfinTrack) => {
     const now = new Date();
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const { hour, minute } = getStationTime(now);
+    const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
     const show = currentShowRef.current;
     const stampedTrack: JellyfinTrack = {
       ...track,
@@ -1113,8 +1114,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     const checkLiveShow = () => {
       const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
+      const { hour: currentHour, minute: currentMinute } = getStationTime(now);
       const nextHour = (currentHour + 1) % 24;
 
       // 1. Synthesize bulletin segment earlier:
@@ -1139,14 +1139,15 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
           currentShowRef.current = live;
           // Mark transition pending so next track boundary kicks off the new show
           pendingShowTransitionRef.current = true;
+          // Invalidate any pre-buffered banter from the previous show so old hosts never speak during new show
+          prebufferedVoiceRef.current = null;
+          prebufferPromiseRef.current = null;
           // If paused, immediately reset clock state to Cycle 1 / Initial Sweeper
           if (!isPlaying) {
             clockStepRef.current = 'INITIAL_SWEEPER';
             setClockStep('INITIAL_SWEEPER');
             cycleCountRef.current = 1;
             setCycleCount(1);
-            prebufferedVoiceRef.current = null;
-            prebufferPromiseRef.current = null;
             setActiveSpeaker(null);
             setActiveTranscript(null);
           }

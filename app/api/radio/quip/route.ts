@@ -5,6 +5,7 @@ import {
   stationBible,
   getCurrentShow,
   getShowById,
+  findMatchingShow,
   getDJById,
   getSideCharacterById,
   getCallerByVoiceTag,
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
     ]);
 
     // 1. Identify Show (Sanity first)
-    const show = (showId ? sanityShows.find(s => s.id === showId || s.id.includes(showId) || showId.includes(s.id)) : null) ||
+    const show = (showId ? findMatchingShow(showId, undefined, sanityShows) : null) ||
                  (showId ? getShowById(showId) : null) ||
                  getCurrentShow();
     let speakerName = '';
@@ -118,22 +119,56 @@ export async function POST(request: NextRequest) {
       });
     } else if (type === 'caller' && caller) {
       // Caller segment
-      const hostId = show.hostIds[0];
-      const host = sanityPresenters.find(p => p.id === hostId || p.id.includes(hostId)) ||
-                   getDJById(hostId) ||
-                   sanityPresenters[0] ||
-                   stationBible.djs[0];
-      speakerName = host.name;
-      const voiceId = resolveVoiceId(host, hostId);
+      const hostIds = show.hostIds || [];
+      const hosts = hostIds
+        .map((id) => sanityPresenters.find((p) => p.id === id || p.id.includes(id)) || getDJById(id))
+        .filter((d): d is DJ => !!d);
+      const effectiveHosts = hosts.length > 0 ? hosts : [sanityPresenters[0] || stationBible.djs[0]];
+      const isDuo = effectiveHosts.length > 1;
+
       characterRole = 'caller';
 
-      const segment = await generateCallerSegment(show, host, caller, topic || 'Load shedding, potholes, and aliens');
-      spokenText = segment.turns.map(t => `${t.speaker}: ${t.text}`).join(' ');
+      const segment = await generateCallerSegment(show, effectiveHosts, caller, topic || 'Load shedding, potholes, and aliens');
 
-      audioBuffer = await synthesizeClonedSpeech(spokenText, voiceId, {
-        model: 's2.1-pro-free',
-        format: 'mp3',
-      });
+      // Synthesize each turn concurrently with its character's cloned voice model
+      try {
+        const turnBuffers = await Promise.all(
+          segment.turns.map(async (turn) => {
+            const isCaller = turn.role === 'caller';
+            const speakerDJ = effectiveHosts.find(
+              (h) =>
+                h.id === turn.characterId ||
+                h.name.toLowerCase().includes(turn.speaker.toLowerCase()) ||
+                (turn.characterId && h.id.includes(turn.characterId))
+            ) || effectiveHosts[0];
+
+            const voiceId =
+              turn.voiceId ||
+              (isCaller
+                ? (caller.fishAudioVoiceId || resolveVoiceId(caller, caller.voiceTag))
+                : (speakerDJ.fishAudioVoiceId || resolveVoiceId(speakerDJ, speakerDJ.id)));
+
+            return synthesizeClonedSpeech(turn.text, voiceId, {
+              model: 's2.1-pro-free',
+              format: 'mp3',
+            });
+          })
+        );
+        audioBuffer = Buffer.concat(turnBuffers);
+      } catch (synthErr) {
+        console.warn('Caller turn synthesis failed, using single voice fallback:', synthErr);
+        const fallbackVoiceId = resolveVoiceId(effectiveHosts[0]);
+        spokenText = segment.turns.map((t) => `${t.speaker}: ${t.text}`).join(' ');
+        audioBuffer = await synthesizeClonedSpeech(spokenText, fallbackVoiceId, {
+          model: 's2.1-pro-free',
+          format: 'mp3',
+        });
+      }
+
+      speakerName = isDuo
+        ? `${effectiveHosts.map((h) => h.name.split(' ')[0]).join(' & ')} with ${caller.archetype}`
+        : `${effectiveHosts[0].name.split(' ')[0]} with ${caller.archetype}`;
+      spokenText = segment.turns.map((t) => `${t.speaker}: ${t.text}`).join('\n');
     } else if (mode === 'caller-block') {
       // 3-Caller Call-in Segment (Clock Step 13)
       characterRole = 'caller';
@@ -146,7 +181,7 @@ export async function POST(request: NextRequest) {
       // Curated allowed callers configured for THIS show in Sanity CMS
       const allowedShowCallers = (show.callers && show.callers.length > 0)
         ? show.callers
-        : (sanityShows.find(s => s.id === show.id || s.title === show.title)?.callers || []);
+        : (sanityShows.find((s) => s.id === show.id || s.title === show.title)?.callers || []);
 
       const effectiveCallers = (allowedShowCallers.length > 0)
         ? allowedShowCallers
@@ -165,7 +200,6 @@ export async function POST(request: NextRequest) {
       );
 
       // Synthesize each turn with its character's cloned voice model in batches of 3
-      const hostVoiceId = resolveVoiceId(effectiveHosts[0]);
       const turnBuffers: Buffer[] = [];
       const BATCH_SIZE = 3;
       for (let i = 0; i < turns.length; i += BATCH_SIZE) {
@@ -174,15 +208,23 @@ export async function POST(request: NextRequest) {
           chunk.map(async (turn, chunkIdx) => {
             const globalIdx = i + chunkIdx;
             const callIdx = Math.min(2, Math.floor(globalIdx / 6));
-            const isCaller = globalIdx % 2 === 1;
+            const isCaller = turn.role === 'caller';
             const currentCaller = selectedCallers[callIdx] || selectedCallers[0];
+
+            // Resolve specific host DJ for this turn to preserve dual-host separation
+            const hostDJ = effectiveHosts.find(
+              (h) =>
+                h.id === turn.characterId ||
+                h.name.toLowerCase().includes(turn.speaker.toLowerCase()) ||
+                (turn.characterId && h.id.includes(turn.characterId))
+            ) || effectiveHosts[0];
 
             // Deterministic voice resolution: direct voiceId from turn -> current caller/host voice
             const voiceId =
               turn.voiceId ||
               (isCaller
                 ? (currentCaller.fishAudioVoiceId || resolveVoiceId(currentCaller, currentCaller.voiceTag))
-                : hostVoiceId);
+                : (hostDJ.fishAudioVoiceId || resolveVoiceId(hostDJ, hostDJ.id)));
 
             return synthesizeClonedSpeech(turn.text, voiceId, {
               model: 's2.1-pro-free',
@@ -194,7 +236,9 @@ export async function POST(request: NextRequest) {
       }
 
       audioBuffer = Buffer.concat(turnBuffers);
-      speakerName = `Live Callers (${selectedCallers.map((c) => c.archetype).join(', ')})`;
+      speakerName = effectiveHosts.length > 1
+        ? `${effectiveHosts.map((h) => h.name.split(' ')[0]).join(' & ')} with Callers`
+        : `${effectiveHosts[0].name.split(' ')[0]} with Callers`;
       spokenText = turns.map((t) => `${t.speaker}: ${t.text}`).join('\n');
     } else {
       // 3. Show-level trigger: Multi-host Banter or Solo Host Monologue

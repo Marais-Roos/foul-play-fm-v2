@@ -1,14 +1,12 @@
 import { NextResponse } from 'next/server';
-import { stationBible, getCurrentShow } from '@/lib/data/station';
+import { stationBible, getCurrentShow, getStationTime } from '@/lib/data/station';
 
 export async function GET() {
   const now = new Date();
   const currentShow = getCurrentShow(now);
 
-  // Calculate elapsed seconds in current 3-hour show window
-  const currentMinutes = now.getMinutes();
-  const currentSeconds = now.getSeconds();
-  const currentHour = now.getHours();
+  // Calculate elapsed seconds in current 3-hour show window using South African station time
+  const { hour: currentHour, minute: currentMinutes, second: currentSeconds } = getStationTime(now);
 
   // Show runs for 3 hours (10,800 seconds)
   const hourOffsetInShow = (currentHour - currentShow.timeSlot.startHour + 24) % 24;

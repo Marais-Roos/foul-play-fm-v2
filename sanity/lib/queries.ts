@@ -10,6 +10,9 @@ export const SHOWS_QUERY = groq`
     vibe,
     jellyfinPlaylistId,
     coverImage,
+    imageWithOverlay,
+    imageWithoutOverlay,
+    studioImage,
     hosts[]->{
       _id,
       name,
@@ -41,7 +44,9 @@ export const SHOWS_QUERY = groq`
       contextStrategy,
       voicePrompt,
       sampleQuote,
-      fishAudioVoiceId
+      fishAudioVoiceId,
+      gender,
+      callerNames
     }
   }
 `;
@@ -84,6 +89,8 @@ export const CALLERS_QUERY = groq`
     contextStrategy,
     voicePrompt,
     sampleQuote,
-    fishAudioVoiceId
+    fishAudioVoiceId,
+    gender,
+    callerNames
   }
 `;

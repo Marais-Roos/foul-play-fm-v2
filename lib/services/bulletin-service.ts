@@ -4,6 +4,7 @@ import {
   fetchSanityShows,
   fetchSanityPresenters,
   getShowById,
+  findMatchingShow,
   getDJById,
   getCurrentShow,
   stationBible,
@@ -73,71 +74,193 @@ export function clearCachedBulletin(): void {
   lastGeneratedAt = 0;
 }
 
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&#8217;/g, "'")
+    .replace(/&#8216;/g, "'")
+    .replace(/&#8220;/g, '"')
+    .replace(/&#8221;/g, '"')
+    .replace(/&#8211;/g, '-')
+    .replace(/&#8212;/g, '--')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'");
+}
+
+function parseRssTitles(xml: string, maxItems = 6): string[] {
+  const titles: string[] = [];
+  const itemRegex = /<item[\s\S]*?>([\s\S]*?)<\/item>/gi;
+  let match;
+  const now = Date.now();
+  const maxAgeMs = 48 * 60 * 60 * 1000; // Ignore items older than 48 hours
+
+  while ((match = itemRegex.exec(xml)) !== null && titles.length < maxItems) {
+    const block = match[1];
+    const titleMatch = block.match(/<title[\s\S]*?>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
+    const pubDateMatch = block.match(/<pubDate[\s\S]*?>([\s\S]*?)<\/pubDate>/i);
+
+    if (titleMatch) {
+      if (pubDateMatch) {
+        const pubTime = new Date(pubDateMatch[1].trim()).getTime();
+        if (!isNaN(pubTime) && now - pubTime > maxAgeMs) {
+          continue; // Skip stale news items
+        }
+      }
+      const cleanTitle = decodeHtmlEntities(
+        titleMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, '').trim()
+      );
+      if (cleanTitle && !titles.includes(cleanTitle)) {
+        titles.push(cleanTitle);
+      }
+    }
+  }
+  return titles;
+}
+
 /**
- * 1. Fetch real South African News headlines from NewsAPI
+ * 1. Fetch real, current South African News headlines
+ * Priority: Direct live feeds from Daily Maverick & SABC News, supplemented by NewsAPI with recency validation.
  */
 export async function fetchSouthAfricaNews(): Promise<string[]> {
+  // 1. Fetch real-time RSS from Daily Maverick & SABC News
+  const rssPromises = [
+    (async () => {
+      try {
+        const res = await fetch('https://www.dailymaverick.co.za/rss/', {
+          headers: { 'User-Agent': 'FoulPlayFM/2.0' },
+          next: { revalidate: 300 },
+        });
+        if (res.ok) {
+          const xml = await res.text();
+          return parseRssTitles(xml, 5);
+        }
+      } catch (e) {
+        console.warn('Daily Maverick RSS fetch failed:', e);
+      }
+      return [];
+    })(),
+    (async () => {
+      try {
+        const res = await fetch('https://www.sabcnews.com/sabcnews/category/south-africa/feed/', {
+          headers: { 'User-Agent': 'FoulPlayFM/2.0' },
+          next: { revalidate: 300 },
+        });
+        if (res.ok) {
+          const xml = await res.text();
+          return parseRssTitles(xml, 5);
+        }
+      } catch (e) {
+        console.warn('SABC News RSS fetch failed:', e);
+      }
+      return [];
+    })(),
+  ];
+
+  // 2. Fetch from NewsAPI if available (strictly filtered to recent articles within 48h)
   const apiKey = process.env.NEWS_API_KEY;
-  if (!apiKey) return [];
-
-  try {
-    // Priority: Quality SA publications (EWN, TimesLIVE, Daily Maverick, IOL)
-    const url = `https://newsapi.org/v2/everything?domains=dailymaverick.co.za,timeslive.co.za,iol.co.za,ewn.co.za&pageSize=4&apiKey=${apiKey}`;
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'FoulPlayFM/2.0' },
-      next: { revalidate: 300 },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data.articles) && data.articles.length > 0) {
-        return data.articles.map((a: any) => a.title).filter(Boolean);
+  const newsApiPromise = (async () => {
+    if (!apiKey) return [];
+    try {
+      const q = encodeURIComponent(`"South Africa" AND (crime OR police OR corruption OR Eskom OR court OR parliament OR minister OR budget)`);
+      const url = `https://newsapi.org/v2/everything?q=${q}&sortBy=publishedAt&language=en&pageSize=6&apiKey=${apiKey}`;
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'FoulPlayFM/2.0' },
+        next: { revalidate: 300 },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.articles)) {
+          const now = Date.now();
+          const maxAgeMs = 48 * 60 * 60 * 1000;
+          return data.articles
+            .filter((a: any) => {
+              if (!a.title || !a.publishedAt) return false;
+              const pub = new Date(a.publishedAt).getTime();
+              return !isNaN(pub) && now - pub <= maxAgeMs;
+            })
+            .map((a: any) => a.title.trim());
+        }
       }
+    } catch (e) {
+      console.warn('NewsAPI fetch failed:', e);
     }
+    return [];
+  })();
 
-    // Secondary fallback: General SA search
-    const query = encodeURIComponent(`"South Africa" AND (economy OR police OR parliament OR Eskom OR minister OR president)`);
-    const fallbackRes = await fetch(`https://newsapi.org/v2/everything?q=${query}&sortBy=publishedAt&language=en&pageSize=4&apiKey=${apiKey}`, {
-      headers: { 'User-Agent': 'FoulPlayFM/2.0' },
-      next: { revalidate: 300 },
-    });
-    if (fallbackRes.ok) {
-      const fbData = await fallbackRes.json();
-      if (Array.isArray(fbData.articles) && fbData.articles.length > 0) {
-        return fbData.articles.map((a: any) => a.title).filter(Boolean);
-      }
-    }
-  } catch (err) {
-    console.warn('NewsAPI SA fetch failed:', err);
-  }
+  const [dmArticles, sabcArticles, apiArticles] = await Promise.all([
+    rssPromises[0],
+    rssPromises[1],
+    newsApiPromise,
+  ]);
 
-  return [];
+  const allArticles = [...dmArticles, ...sabcArticles, ...apiArticles];
+  const uniqueArticles = Array.from(new Set(allArticles)).filter(Boolean);
+
+  return uniqueArticles.slice(0, 6);
 }
 
 /**
  * 2. Fetch Targeted Sports News (Rugby, Football, Cricket - zero American sports)
  */
 export async function fetchTargetedSportsNews(): Promise<string[]> {
-  const apiKey = process.env.NEWS_API_KEY;
-  if (!apiKey) return [];
-
-  try {
-    const q = encodeURIComponent(`Springboks OR "Vodacom Bulls" OR "Premier League" OR "Manchester United" OR Proteas OR "Currie Cup" OR "Champions League" OR "FC Barcelona" OR URC`);
-    const url = `https://newsapi.org/v2/everything?q=${q}&sortBy=publishedAt&language=en&pageSize=4&apiKey=${apiKey}`;
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'FoulPlayFM/2.0' },
-      next: { revalidate: 300 },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data.articles) && data.articles.length > 0) {
-        return data.articles.map((a: any) => a.title).filter(Boolean);
+  // 1. SABC Sport RSS
+  const sabcSportPromise = (async () => {
+    try {
+      const res = await fetch('https://www.sabcnews.com/sabcnews/category/sport/feed/', {
+        headers: { 'User-Agent': 'FoulPlayFM/2.0' },
+        next: { revalidate: 300 },
+      });
+      if (res.ok) {
+        const xml = await res.text();
+        return parseRssTitles(xml, 5);
       }
+    } catch (e) {
+      console.warn('SABC Sport RSS fetch failed:', e);
     }
-  } catch (err) {
-    console.warn('NewsAPI Sports fetch failed:', err);
-  }
+    return [];
+  })();
 
-  return [];
+  // 2. NewsAPI Targeted Football & Rugby
+  const apiKey = process.env.NEWS_API_KEY;
+  const newsApiSportPromise = (async () => {
+    if (!apiKey) return [];
+    try {
+      const q = encodeURIComponent(`Springboks OR "Vodacom Bulls" OR "Premier League" OR "Manchester United" OR Proteas OR "Champions League" OR "Orlando Pirates" OR "Kaizer Chiefs" OR Sundowns OR URC`);
+      const url = `https://newsapi.org/v2/everything?q=${q}&sortBy=publishedAt&language=en&pageSize=6&apiKey=${apiKey}`;
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'FoulPlayFM/2.0' },
+        next: { revalidate: 300 },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.articles)) {
+          const now = Date.now();
+          const maxAgeMs = 48 * 60 * 60 * 1000;
+          return data.articles
+            .filter((a: any) => {
+              if (!a.title || !a.publishedAt) return false;
+              const pub = new Date(a.publishedAt).getTime();
+              return !isNaN(pub) && now - pub <= maxAgeMs;
+            })
+            .map((a: any) => a.title.trim());
+        }
+      }
+    } catch (e) {
+      console.warn('NewsAPI sports fetch failed:', e);
+    }
+    return [];
+  })();
+
+  const [sabcSport, apiSport] = await Promise.all([
+    sabcSportPromise,
+    newsApiSportPromise,
+  ]);
+
+  const combined = [...sabcSport, ...apiSport];
+  const unique = Array.from(new Set(combined)).filter(Boolean);
+  return unique.slice(0, 5);
 }
 
 /**
@@ -358,6 +481,7 @@ CRITICAL EDITORIAL STYLE RULES:
 3. PROFANE & VISCERAL: The anchors are deeply cynical, angry South Africans tired of government failure, incompetent management, and crumbling infrastructure. Let them swear naturally and aggressively (bullshit, fuck, bloody, absolute kak, circus, clowns, thieves, useless bastards).
 4. SOUTH AFRICAN FLAVOUR: Natural local references and cadence where appropriate (Eskom clowns, potholes, tenders, braai, load shedding, Vaal, Sandton, Gautrain).
 5. STRICTLY NO AMERICAN SPORTS: Focus purely on Rugby (Springboks/URC), Football (Premier League/Champions League), and Cricket (Proteas).
+6. NEVER RECYCLE TONE EXAMPLES: The tone examples below are PURELY stylistic demonstrations of delivery, attitude, and voice. NEVER re-use the specific stories, topics, or names from the tone examples (e.g. "half a billion rand", "former minister in cuffs", "Khayelitsha", "Koeberg", "Ten Hag", "Proteas 7 wickets") unless they literally appear in the live ingested data for this specific bulletin. Gavin Stone and Gary Miller MUST report and rant about the ACTUAL LIVE HEADLINES provided below.
 
 THE ANCHORS:
 1. GAVIN STONE (News & Weather):
@@ -383,13 +507,13 @@ Output STRICT JSON schema:
 ]
 No markdown fences, no stage directions, no asterisks.`;
 
-  const userPrompt = `Live Ingested Data for this bulletin:
+  const userPrompt = `Live Ingested Data for this bulletin (${new Date().toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })}):
 SA HEADLINES: ${saNews.length > 0 ? saNews.join("; ") : "No live headlines available"}
 SPORTS HEADLINES: ${sports.length > 0 ? sports.join("; ") : "No live sports headlines available"}
 WEATHER: ${weather}
 GAUTENG TRAFFIC: ${traffic.length > 0 ? traffic.join("; ") : "Nothing found - zero incident data or camera feeds detected on the wire"}
 
-Write the full top-of-the-hour bulletin now.`;
+Write the full top-of-the-hour bulletin now based on this live data.`;
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
   const res = await fetch(endpoint, {
@@ -483,8 +607,7 @@ export async function buildFullHourlyBulletin(
   const upcomingDate = new Date(Date.now() + 2 * 60 * 1000);
   const targetShow =
     (showId
-      ? sanityShows.find((s) => s.id === showId || s.id.includes(showId) || showId.includes(s.id)) ||
-        getShowById(showId)
+      ? findMatchingShow(showId, undefined, sanityShows) || getShowById(showId)
       : null) || getCurrentShow(upcomingDate);
 
   const hostIds = targetShow.hostIds || [];

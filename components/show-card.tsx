@@ -18,6 +18,9 @@ interface ShowCardProps {
     hostIds?: string[];
     hostNames?: string;
     coverImage?: any;
+    imageWithOverlay?: any;
+    imageWithoutOverlay?: any;
+    studioImage?: any;
     imageUrl?: string;
     vibe?: string;
     description?: string;
@@ -30,9 +33,10 @@ export function ShowCard({ show, index }: ShowCardProps) {
   const showId = show.id || show._id || `show-${index}`;
   const isCurrent = currentShow.id === showId || currentShow.title === show.title;
 
-  // Resolve Sanity Image URL with square crop
-  const sanityImageUrl = show.coverImage
-    ? urlForImage(show.coverImage)?.width(800).height(800).fit("crop").url()
+  // Resolve Sanity Image URL with square crop (prefer imageWithOverlay, fallback to coverImage or imageWithoutOverlay)
+  const rawCoverImage = show.imageWithOverlay || show.coverImage || show.imageWithoutOverlay;
+  const sanityImageUrl = rawCoverImage
+    ? urlForImage(rawCoverImage)?.width(800).height(800).fit("crop").url()
     : null;
 
   // Format host name
@@ -70,14 +74,19 @@ export function ShowCard({ show, index }: ShowCardProps) {
         startHour: show.timeSlot,
         endHour: (show.timeSlot + 3) % 24,
       } : show.timeSlot,
-      hostIds: show.hostIds || [],
+      hostIds: (show.hostIds && show.hostIds.length > 0)
+        ? show.hostIds
+        : (Array.isArray(show.hosts) ? show.hosts.map((h: any) => h.slug || h._id) : []),
       hostNames: hostName,
       topics: [],
       musicGenres: [],
       vibe: show.vibe || "",
       shortDescription: show.description || "",
       detailedDescription: show.description || "",
-      coverImage: show.coverImage,
+      coverImage: rawCoverImage,
+      imageWithOverlay: show.imageWithOverlay || show.coverImage,
+      imageWithoutOverlay: show.imageWithoutOverlay,
+      studioImage: show.studioImage,
       imageUrl: finalImageUrl,
     });
 

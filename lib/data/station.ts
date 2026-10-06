@@ -5,6 +5,7 @@ import { SHOWS_QUERY, PRESENTERS_QUERY, CALLERS_QUERY, SIDE_CHARACTERS_QUERY } f
 
 export const DEFAULT_SHOW_IMAGES: Record<string, string> = {
   'truckers-tales-tacky-talk': 'https://cdn.sanity.io/images/fkbibl7o/production/90be52f1115123dca27e7ea6835fb67f31b3f1ab-1024x1024.png',
+  'truckers-tales-and-tacky-talk': 'https://cdn.sanity.io/images/fkbibl7o/production/90be52f1115123dca27e7ea6835fb67f31b3f1ab-1024x1024.png',
   'the-tin-foil-takeover': 'https://cdn.sanity.io/images/fkbibl7o/production/9792aa9deb1b50f8a61a5afc7cd8c6df6493eccc-1024x1024.png',
   'morning-madness': 'https://cdn.sanity.io/images/fkbibl7o/production/b71cef41796e118ada529a1b62a887a5f1e5c9d7-1024x1024.png',
   'the-wacky-hour': 'https://cdn.sanity.io/images/fkbibl7o/production/c86fb94a1b025e8e2e3601ce5814b0512f570a35-1024x1024.png',
@@ -58,7 +59,7 @@ export async function fetchSanityShows(): Promise<Show[]> {
         const endHour = (startHour + 3) % 24;
         const hostIds = s.hosts?.map((h: any) => h.slug || h._id) || [];
         const hostNames = s.hosts?.map((h: any) => h.name).join(' & ') || 'Live Host';
-        const localShow = stationBible.shows.find(ls => ls.id === (s.slug || s._id) || ls.title === s.title);
+        const localShow = findMatchingShow(s.slug || s._id, s.title, stationBible.shows);
         
         const sideCharacters: SideCharacter[] = (s.sideCharacters || []).map((sc: any) => ({
           id: sc.slug || sc._id,
@@ -76,6 +77,9 @@ export async function fetchSanityShows(): Promise<Show[]> {
         const callers: CallerPersona[] = (s.callers && s.callers.length > 0)
           ? s.callers.filter(Boolean).map((c: any) => {
               const localCaller = stationBible.callers.find(lc => lc.voiceTag === c.voiceTag || lc.id === c.voiceTag?.toLowerCase());
+              const rawNames = c.callerNames
+                ? c.callerNames.split(',').map((n: string) => n.trim()).filter(Boolean)
+                : undefined;
               return {
                 id: c.voiceTag || c._id,
                 voiceTag: c.voiceTag,
@@ -87,6 +91,8 @@ export async function fetchSanityShows(): Promise<Show[]> {
                 recommendedPreviewText: c.sampleQuote || localCaller?.recommendedPreviewText || '',
                 fishAudioVoiceId: c.fishAudioVoiceId || localCaller?.fishAudioVoiceId || null,
                 voicePrompt: c.voicePrompt,
+                gender: c.gender || (localCaller as any)?.gender,
+                names: rawNames || (localCaller as any)?.names,
               };
             })
           : (localShow?.callers || []);
@@ -109,8 +115,11 @@ export async function fetchSanityShows(): Promise<Show[]> {
           },
           hostIds: hostIds.length > 0 ? hostIds : (localShow?.hostIds || []),
           hostNames: hostNames || (localShow?.hostNames || 'Live Host'),
-          imageUrl: s.coverImage ? undefined : (localShow?.imageUrl || DEFAULT_SHOW_IMAGES[s.slug || s._id]),
-          coverImage: s.coverImage,
+          imageUrl: (s.imageWithOverlay || s.coverImage) ? undefined : (localShow?.imageUrl || DEFAULT_SHOW_IMAGES[s.slug || s._id]),
+          coverImage: s.imageWithOverlay || s.coverImage,
+          imageWithOverlay: s.imageWithOverlay || s.coverImage,
+          imageWithoutOverlay: s.imageWithoutOverlay,
+          studioImage: s.studioImage,
           sideCharacters: sideCharacters.length > 0 ? sideCharacters : undefined,
           callers: callers.length > 0 ? callers : undefined,
         };
@@ -269,6 +278,9 @@ export async function fetchSanityCallers(): Promise<CallerPersona[]> {
     if (Array.isArray(rawCallers) && rawCallers.length > 0) {
       const mapped: CallerPersona[] = rawCallers.map((c: any) => {
         const localCaller = stationBible.callers.find(lc => lc.voiceTag === c.voiceTag);
+        const rawNames = c.callerNames
+          ? c.callerNames.split(',').map((n: string) => n.trim()).filter(Boolean)
+          : undefined;
         return {
           id: c.voiceTag || c._id,
           voiceTag: c.voiceTag,
@@ -280,6 +292,8 @@ export async function fetchSanityCallers(): Promise<CallerPersona[]> {
           recommendedPreviewText: c.sampleQuote || localCaller?.recommendedPreviewText || '',
           fishAudioVoiceId: c.fishAudioVoiceId || localCaller?.fishAudioVoiceId || null,
           voicePrompt: c.voicePrompt,
+          gender: c.gender || (localCaller as any)?.gender,
+          names: rawNames || (localCaller as any)?.names,
         };
       });
       cachedSanityCallers = mapped;
@@ -293,38 +307,118 @@ export async function fetchSanityCallers(): Promise<CallerPersona[]> {
 }
 
 /**
- * Returns the currently scheduled show based on local time (or provided date),
+ * Station-wide timezone helper for Foul Play FM (anchored to Africa/Johannesburg, UTC+2).
+ * Ensures server-side rendering, API routes (e.g. on Vercel), and international listeners
+ * always evaluate station broadcast time correctly.
+ */
+export function getStationTime(date: Date = new Date()): { hour: number; minute: number; second: number } {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Africa/Johannesburg',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hourCycle: 'h23',
+    });
+    const parts = formatter.formatToParts(date);
+    const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+    const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+    const second = parseInt(parts.find(p => p.type === 'second')?.value || '0', 10);
+    return { hour, minute, second };
+  } catch {
+    return { hour: date.getHours(), minute: date.getMinutes(), second: date.getSeconds() };
+  }
+}
+
+/**
+ * Resilient matcher between show IDs, Sanity slugs (which may convert '&' to 'and'), and titles.
+ */
+export function findMatchingShow(identifier?: string, title?: string, pool?: Show[]): Show | undefined {
+  if (!identifier && !title) return undefined;
+  const shows = pool || (cachedSanityShows && cachedSanityShows.length > 0 ? cachedSanityShows : stationBible.shows);
+
+  const rawId = (identifier || '').toLowerCase().trim();
+  const rawTitle = (title || '').toLowerCase().trim();
+
+  const clean = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/['"“”‘’]/g, '')
+      .replace(/&/g, '')
+      .replace(/\band\b/g, '')
+      .replace(/[^a-z0-9]/g, '');
+
+  const cleanId = clean(rawId);
+  const cleanTitle = clean(rawTitle);
+
+  for (const show of shows) {
+    const sId = (show.id || '').toLowerCase();
+    const sTitle = (show.title || '').toLowerCase();
+    const sCleanId = clean(sId);
+    const sCleanTitle = clean(sTitle);
+
+    // 1. Exact matches
+    if (show.id === identifier || sId === rawId || show.title === title || sTitle === rawTitle) {
+      return show;
+    }
+
+    // 2. Normalized matches (stripping 'and', '&', punctuation)
+    if (cleanId && (sCleanId === cleanId || sCleanTitle === cleanId)) {
+      return show;
+    }
+    if (cleanTitle && (sCleanTitle === cleanTitle || sCleanId === cleanTitle)) {
+      return show;
+    }
+
+    // 3. Token match: check if all non-stop words match
+    const idTokens = rawId.split(/[-_\s]+/).filter(t => t && t !== 'and' && t !== '&');
+    if (idTokens.length >= 2 && idTokens.every(tok => sId.includes(tok) || sTitle.includes(tok))) {
+      return show;
+    }
+
+    // 4. Substring containment fallback
+    if (cleanId && cleanId.length >= 5 && (sCleanId.includes(cleanId) || cleanId.includes(sCleanId))) {
+      return show;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Returns the currently scheduled show based on South African station time (or provided date),
  * prioritizing live data from Sanity CMS over local station bible.
  */
 export function getCurrentShow(date: Date = new Date()): Show {
   const pool = cachedSanityShows && cachedSanityShows.length > 0 ? cachedSanityShows : stationBible.shows;
-  const currentHour = date.getHours();
+  const { hour: currentHour } = getStationTime(date);
   const show = pool.find(s => {
     if (s.timeSlot.startHour < s.timeSlot.endHour) {
       return currentHour >= s.timeSlot.startHour && currentHour < s.timeSlot.endHour;
     } else {
       // Wraps around midnight (e.g. 21:00 to 00:00)
-      return currentHour >= s.timeSlot.startHour || currentHour < (s.timeSlot.endHour === 24 ? 24 : s.timeSlot.endHour);
+      const effectiveEnd = (s.timeSlot.endHour === 0 || s.timeSlot.endHour === 24) ? 0 : s.timeSlot.endHour;
+      return currentHour >= s.timeSlot.startHour || (effectiveEnd > 0 && currentHour < effectiveEnd);
     }
   });
 
   const selected = show || pool[0];
   return {
     ...selected,
-    imageUrl: selected.imageUrl || DEFAULT_SHOW_IMAGES[selected.id],
+    imageUrl: selected.imageUrl || DEFAULT_SHOW_IMAGES[selected.id] || DEFAULT_SHOW_IMAGES['truckers-tales-tacky-talk'],
   };
 }
 
 /**
- * Get show by ID, prioritizing live Sanity CMS data.
+ * Get show by ID, prioritizing live Sanity CMS data with resilient matching.
  */
 export function getShowById(id: string): Show | undefined {
   const pool = cachedSanityShows && cachedSanityShows.length > 0 ? cachedSanityShows : stationBible.shows;
-  const show = pool.find(s => s.id === id || s.id.includes(id) || id.includes(s.id));
+  const show = findMatchingShow(id, undefined, pool);
   if (!show) return undefined;
   return {
     ...show,
-    imageUrl: show.imageUrl || DEFAULT_SHOW_IMAGES[show.id],
+    imageUrl: show.imageUrl || DEFAULT_SHOW_IMAGES[show.id] || DEFAULT_SHOW_IMAGES['truckers-tales-tacky-talk'],
   };
 }
 
@@ -338,7 +432,8 @@ export interface ShowProgressInfo {
 }
 
 /**
- * Calculates current real-time progress through a show's scheduled broadcast window.
+ * Calculates current real-time progress through a show's scheduled broadcast window
+ * using South Africa station time.
  */
 export function calculateShowProgress(show: Show, now: Date = new Date()): ShowProgressInfo {
   let startHour = 18;
@@ -372,9 +467,7 @@ export function calculateShowProgress(show: Show, now: Date = new Date()): ShowP
   const totalMinutes = Math.max(1, endMinutes - startMinutes);
   const totalSeconds = totalMinutes * 60;
 
-  const currentHour = now.getHours();
-  const currentMin = now.getMinutes();
-  const currentSec = now.getSeconds();
+  const { hour: currentHour, minute: currentMin, second: currentSec } = getStationTime(now);
 
   let currentTotalMinutes = currentHour * 60 + currentMin + currentSec / 60;
   if (effectiveEndHour > 24 && currentHour < endHour) {
@@ -408,7 +501,7 @@ export function calculateShowProgress(show: Show, now: Date = new Date()): ShowP
 }
 
 /**
- * Get DJ by ID or name slug, prioritizing live Sanity CMS presenters
+ * Get DJ by ID or name slug, prioritizing live Sanity CMS presenters with resilient moniker matching.
  */
 export function getDJById(id: string): DJ | undefined {
   if (!id) return undefined;
@@ -421,6 +514,17 @@ export function getDJById(id: string): DJ | undefined {
       return d.id === id || dClean === clean || dClean.includes(clean) || clean.includes(dClean) || nameClean.includes(clean);
     });
     if (found) return found;
+
+    // Tokenized word match against Sanity DJs (handles nicknames/monikers)
+    const idTokens = id.toLowerCase().split(/[-_\s]+/).filter(Boolean);
+    if (idTokens.length >= 2) {
+      const tokenFound = cachedSanityDJs.find(d => {
+        const dId = d.id.toLowerCase();
+        const dName = d.name.toLowerCase();
+        return idTokens.every(tok => dId.includes(tok) || dName.includes(tok));
+      });
+      if (tokenFound) return tokenFound;
+    }
   }
 
   return findMatchingLocalDJ(id);

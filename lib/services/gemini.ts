@@ -1,9 +1,10 @@
 import { Show, DJ, SideCharacter, CallerPersona } from '../types/station';
-import { getDJById, getSideCharacterById } from '../data/station';
+import { getDJById, getSideCharacterById, resolveVoiceId } from '../data/station';
 import {
   getRandomCallerLines,
   assignCallerIdentity,
   generateSingleCallFallback,
+  detectCallerGender,
 } from '../data/caller-identities';
 
 export interface DialogueTurn {
@@ -443,31 +444,57 @@ Reference real locations along these primary corridors (like Buccleuch, Gillooly
 }
 
 /**
- * Generates an on-air caller phone-in segment between the Show Host and a Caller Persona.
+ * Generates an on-air caller phone-in segment between the Show Host(s) and a Caller Persona.
+ * Supports both solo hosts and dual-host setups with strict persona separation.
  */
 export async function generateCallerSegment(
   show: Show,
-  host: DJ,
+  hostOrHosts: DJ | DJ[],
   caller: CallerPersona,
   topic: string
 ): Promise<GeneratedScript> {
+  const hosts = Array.isArray(hostOrHosts) ? hostOrHosts : [hostOrHosts];
+  const isDuo = hosts.length > 1;
+  const host0 = hosts[0];
+  const host1 = isDuo ? hosts[1] : hosts[0];
+  const h0Short = host0.name.split(' ')[0];
+  const h1Short = host1.name.split(' ')[0];
+
+  const hostDesc = isDuo
+    ? `THE CO-HOSTS (STRICT PERSONALITY SEPARATION REQUIRED):
+- Host 1: ${host0.name} (${host0.id}). Parody of ${host0.parodyOf}. Personality: ${host0.personality}.
+  * CRITICAL DIRECTIVE: ${h0Short} MUST strictly speak in character as ${host0.parodyOf}. ${h0Short} must NEVER sound like a diva, never use gossip slangs, and never assume ${h1Short}'s persona.
+- Host 2: ${host1.name} (${host1.id}). Parody of ${host1.parodyOf}. Personality: ${host1.personality}.
+  * CRITICAL DIRECTIVE: ${h1Short} MUST strictly speak in character as ${host1.parodyOf}. ${h1Short} must NEVER use ${h0Short}'s mannerisms or style.`
+    : `Host: ${host0.name} (${host0.id}) (${host0.parodyOf} parody). Personality: ${host0.personality}.`;
+
+  const formatDesc = isDuo
+    ? `Format: Generate 4 turns of dialogue (Turn 1: ${h0Short} picks up line and greets caller -> Turn 2: ${caller.archetype} makes absurd point -> Turn 3: ${h1Short} delivers sharp reaction / roast in their signature style -> Turn 4: ${h0Short} delivers punchline roast and cuts caller off).
+Output JSON strictly with this schema:
+[
+  {"role": "host", "speaker": "${h0Short}", "characterId": "${host0.id}", "text": "..."},
+  {"role": "caller", "speaker": "${caller.archetype}", "characterId": "${caller.voiceTag}", "text": "..."},
+  {"role": "host", "speaker": "${h1Short}", "characterId": "${host1.id}", "text": "..."},
+  {"role": "host", "speaker": "${h0Short}", "characterId": "${host0.id}", "text": "..."}
+]`
+    : `Format: Generate exactly 3 turns of dialogue (Turn 1: Host greets caller -> Turn 2: Caller makes absurd point -> Turn 3: Host reacts/roasts and cuts caller off).
+Output JSON strictly with this schema:
+[
+  {"role": "host", "speaker": "${h0Short}", "characterId": "${host0.id}", "text": "..."},
+  {"role": "caller", "speaker": "${caller.archetype}", "characterId": "${caller.voiceTag}", "text": "..."},
+  {"role": "host", "speaker": "${h0Short}", "characterId": "${host0.id}", "text": "..."}
+]`;
+
   const systemInstruction = `
 You are writing a satirical phone-in radio call for Foul Play FM, set in Gauteng, South Africa.
 Show: ${show.title} (Vibe: ${show.vibe}).
-Host: ${host.name} (${host.parodyOf} parody).
-Host Personality: ${host.personality}.
+${hostDesc}
 
-Caller: ${caller.archetype} (Satirizing: ${caller.targetOfSatire}).
+Caller: ${caller.archetype} (Satirizing: ${caller.targetOfSatire}, Gender: ${detectCallerGender(caller)}).
 Caller Strategy: ${caller.aiContextStrategy}.
 Caller Description: ${caller.description}.
 
-Format: Generate exactly 3 to 4 turns of dialogue (Host greets caller -> Caller makes absurd point -> Host reacts/roasts -> Host cuts them off).
-Output JSON strictly with this schema:
-[
-  {"role": "host", "speaker": "${host.name}", "text": "..."},
-  {"role": "caller", "speaker": "${caller.archetype}", "text": "..."},
-  {"role": "host", "speaker": "${host.name}", "text": "..."}
-]
+${formatDesc}
 Do NOT wrap in markdown ticks if possible, or use standard json. No stage directions in parentheses.
 `;
 
@@ -479,14 +506,35 @@ The caller calls in to give their unhinged perspective. Make it authentically hi
   try {
     const raw = await callGemini(systemInstruction, userPrompt);
     const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-    const parsedTurns: Array<{ role: 'host' | 'caller'; speaker: string; text: string }> = JSON.parse(cleaned);
+    const parsedTurns: Array<{ role: 'host' | 'caller'; speaker: string; characterId?: string; text: string }> = JSON.parse(cleaned);
 
-    const turns: DialogueTurn[] = parsedTurns.map(t => ({
-      speaker: t.speaker,
-      role: t.role,
-      characterId: t.role === 'host' ? host.id : caller.id,
-      text: t.text,
-    }));
+    const turns: DialogueTurn[] = parsedTurns.map((t) => {
+      const isCaller = t.role === 'caller';
+      if (isCaller) {
+        return {
+          speaker: caller.archetype,
+          role: 'caller' as const,
+          characterId: caller.voiceTag,
+          voiceId: caller.fishAudioVoiceId || resolveVoiceId(caller, caller.voiceTag),
+          text: sanitizeVoiceScript(t.text),
+        };
+      }
+
+      const matchingHost = hosts.find(
+        (h) =>
+          h.id === t.characterId ||
+          h.name.toLowerCase().includes((t.speaker || '').toLowerCase()) ||
+          (t.speaker || '').toLowerCase().includes(h.name.split(' ')[0].toLowerCase())
+      ) || host0;
+
+      return {
+        speaker: matchingHost.name.split(' ')[0],
+        role: 'host' as const,
+        characterId: matchingHost.id,
+        voiceId: matchingHost.fishAudioVoiceId || resolveVoiceId(matchingHost, matchingHost.id),
+        text: sanitizeVoiceScript(t.text),
+      };
+    });
 
     return {
       title: `${caller.archetype} on ${show.title}`,
@@ -495,26 +543,60 @@ The caller calls in to give their unhinged perspective. Make it authentically hi
     };
   } catch {
     // High quality offline fallback
-    const turns: DialogueTurn[] = [
-      {
-        speaker: host.name,
-        role: 'host',
-        characterId: host.id,
-        text: `Line 4, you're live on Foul Play FM. Make it quick, I don't have all day.`,
-      },
-      {
-        speaker: caller.archetype,
-        role: 'caller',
-        characterId: caller.id,
-        text: caller.recommendedPreviewText,
-      },
-      {
-        speaker: host.name,
-        role: 'host',
-        characterId: host.id,
-        text: `Unbelievable. Security, cut the line and send this man a coupon for remedial education. Back to the music.`,
-      },
-    ];
+    const turns: DialogueTurn[] = isDuo
+      ? [
+          {
+            speaker: h0Short,
+            role: 'host',
+            characterId: host0.id,
+            voiceId: host0.fishAudioVoiceId || resolveVoiceId(host0, host0.id),
+            text: `Line 4, you're live on Foul Play FM with ${h0Short} and ${h1Short}. Make it quick!`,
+          },
+          {
+            speaker: caller.archetype,
+            role: 'caller',
+            characterId: caller.voiceTag,
+            voiceId: caller.fishAudioVoiceId || resolveVoiceId(caller, caller.voiceTag),
+            text: caller.recommendedPreviewText,
+          },
+          {
+            speaker: h1Short,
+            role: 'host',
+            characterId: host1.id,
+            voiceId: host1.fishAudioVoiceId || resolveVoiceId(host1, host1.id),
+            text: `Honey, please. That is the most unhinged take I have heard all day. Cut the line!`,
+          },
+          {
+            speaker: h0Short,
+            role: 'host',
+            characterId: host0.id,
+            voiceId: host0.fishAudioVoiceId || resolveVoiceId(host0, host0.id),
+            text: `Line dumped. Don't call back. Back to the music.`,
+          },
+        ]
+      : [
+          {
+            speaker: h0Short,
+            role: 'host',
+            characterId: host0.id,
+            voiceId: host0.fishAudioVoiceId || resolveVoiceId(host0, host0.id),
+            text: `Line 4, you're live on Foul Play FM. Make it quick, I don't have all day.`,
+          },
+          {
+            speaker: caller.archetype,
+            role: 'caller',
+            characterId: caller.voiceTag,
+            voiceId: caller.fishAudioVoiceId || resolveVoiceId(caller, caller.voiceTag),
+            text: caller.recommendedPreviewText,
+          },
+          {
+            speaker: h0Short,
+            role: 'host',
+            characterId: host0.id,
+            voiceId: host0.fishAudioVoiceId || resolveVoiceId(host0, host0.id),
+            text: `Unbelievable. Security, cut the line and send this caller a coupon for remedial education. Back to the music.`,
+          },
+        ];
 
     return {
       title: `${caller.archetype} on ${show.title} (Cached)`,
@@ -527,6 +609,7 @@ The caller calls in to give their unhinged perspective. Make it authentically hi
 /**
  * Generates an unhinged 3-caller radio phone-in segment.
  * The host(s) take three calls, each with a 6-turn conversation (18 turns total).
+ * Strictly maintains host identity separation in multi-host shows.
  */
 export async function generateTripleCallerSegment(
   show: Show,
@@ -554,66 +637,124 @@ export async function generateTripleCallerSegment(
   const call3 = assignCallerIdentity(c3, lines[2]);
   const callIdentities = [call1, call2, call3];
 
-  const hostDesc = hosts
-    .map((h) => `- ${h.name} (${h.id}): Parody of ${h.parodyOf}. Personality: ${h.personality}`)
-    .join('\n');
+  const isDuo = hosts.length > 1;
+  const host0 = hosts[0];
+  const host1 = isDuo ? hosts[1] : hosts[0];
+  const h0Short = host0.name.split(' ')[0];
+  const h1Short = host1.name.split(' ')[0];
+
+  const hostGuidance = isDuo
+    ? `THE CO-HOSTS (CRITICAL IDENTITY SEPARATION - DO NOT MIX PERSONAS):
+Host A: ${host0.name} (${host0.id})
+- Role: Lead Host on Call 1 & Call 3; Banter Interjector on Call 2
+- Parody Of: ${host0.parodyOf}
+- Personality & Style: ${host0.personality}
+- CRITICAL RULE: ${h0Short} MUST strictly talk in their own voice and style (${host0.parodyOf}). ${h0Short} must NEVER sound like a diva, NEVER use gossip slang/phrases, and NEVER assume ${h1Short}'s persona!
+
+Host B: ${host1.name} (${host1.id})
+- Role: Lead Host on Call 2; Banter Interjector on Call 1 & Call 3
+- Parody Of: ${host1.parodyOf}
+- Personality & Style: ${host1.personality}
+- CRITICAL RULE: ${h1Short} MUST strictly talk in their own voice and style (${host1.parodyOf}). ${h1Short} must NEVER use ${h0Short}'s mannerisms or style!`
+    : `THE HOST:
+${host0.name} (${host0.id})
+- Parody Of: ${host0.parodyOf}
+- Personality: ${host0.personality}`;
+
+  const conversationStructure = isDuo
+    ? `CONVERSATION STRUCTURE FOR DUAL HOSTS:
+You must write 3 consecutive, back-to-back phone calls.
+For EACH of the 3 calls, generate EXACTLY 6 turns of rapid-fire dialogue alternating Host -> Caller -> Host -> Caller -> Host -> Caller:
+
+Call 1:
+- Turn 1 (${h0Short}): Picks up Line ${call1.line} and introduces caller: "We've got ${call1.name} from ${call1.suburb} on line ${call1.line}, ${call1.name}... what's up?"
+- Turn 2 (${call1.name}): Delivers absurd, unhinged grievance in their signature persona style.
+- Turn 3 (${h1Short}): ${h1Short} chimes in with sharp disbelief, roasting, or mockery strictly in their own persona.
+- Turn 4 (${call1.name}): Caller doubles down, yelling buzzwords or catchphrase.
+- Turn 5 (${h0Short}): ${h0Short} delivers a ruthless punchline roast and cuts the line.
+- Turn 6 (${call1.name}): Caller frantic parting shout cut off mid-sentence.
+
+Call 2:
+- Turn 7 (${h1Short}): Picks up Line ${call2.line} and introduces caller: "Line ${call2.line}, ${call2.name} from ${call2.suburb}, you're on with ${h1Short} and ${h0Short}. Talk to me."
+- Turn 8 (${call2.name}): Delivers absurd, unhinged grievance in character.
+- Turn 9 (${h0Short}): ${h0Short} chimes in with aggressive disbelief or mockery strictly in their own persona.
+- Turn 10 (${call2.name}): Caller doubles down.
+- Turn 11 (${h1Short}): ${h1Short} delivers a ruthless punchline roast and cuts the line.
+- Turn 12 (${call2.name}): Caller frantic parting shout cut off mid-sentence.
+
+Call 3:
+- Turn 13 (${h0Short}): Picks up Line ${call3.line} and introduces caller: "Line ${call3.line}, ${call3.name} from ${call3.suburb}... what's your problem?"
+- Turn 14 (${call3.name}): Delivers absurd, unhinged grievance in character.
+- Turn 15 (${h1Short}): ${h1Short} chimes in mocking the caller.
+- Turn 16 (${call3.name}): Caller doubles down or screams signature catchphrase.
+- Turn 17 (${h0Short}): ${h0Short} delivers final ruthless roast and cuts switchboard line.
+- Turn 18 (${call3.name}): Caller frantic parting shout cut off mid-sentence.`
+    : `CONVERSATION STRUCTURE FOR SOLO HOST:
+You must write 3 consecutive, back-to-back phone calls.
+For EACH of the 3 calls, generate EXACTLY 6 turns alternating Host -> Caller -> Host -> Caller -> Host -> Caller:
+- Turn 1 (Host): Picks up the assigned line and introduces caller by name, suburb, and line number in host's style.
+- Turn 2 (Caller): Caller delivers absurd grievance in character.
+- Turn 3 (Host): Host reacts with shock, mockery, or aggressive disbelief.
+- Turn 4 (Caller): Caller doubles down with absurd logic or catchphrase.
+- Turn 5 (Host): Host delivers ruthless comedic roast and cuts call.
+- Turn 6 (Caller): Caller frantic parting shout cut off mid-sentence.`;
+
+  const schemaExample = isDuo
+    ? `OUTPUT STRICTLY AS A JSON ARRAY OF EXACTLY 18 OBJECTS:
+[
+  {"role": "host", "speaker": "${h0Short}", "characterId": "${host0.id}", "text": "We've got ${call1.name} from ${call1.suburb} on line ${call1.line}, ${call1.name}... what's up?"},
+  {"role": "caller", "speaker": "${call1.name}", "characterId": "${c1.voiceTag}", "text": "..."},
+  {"role": "host", "speaker": "${h1Short}", "characterId": "${host1.id}", "text": "..."},
+  {"role": "caller", "speaker": "${call1.name}", "characterId": "${c1.voiceTag}", "text": "..."},
+  {"role": "host", "speaker": "${h0Short}", "characterId": "${host0.id}", "text": "..."},
+  {"role": "caller", "speaker": "${call1.name}", "characterId": "${c1.voiceTag}", "text": "..."}
+]`
+    : `OUTPUT STRICTLY AS A JSON ARRAY OF EXACTLY 18 OBJECTS:
+[
+  {"role": "host", "speaker": "${h0Short}", "characterId": "${host0.id}", "text": "We've got ${call1.name} from ${call1.suburb} on line ${call1.line}, ${call1.name}... what's up?"},
+  {"role": "caller", "speaker": "${call1.name}", "characterId": "${c1.voiceTag}", "text": "..."},
+  {"role": "host", "speaker": "${h0Short}", "characterId": "${host0.id}", "text": "..."},
+  {"role": "caller", "speaker": "${call1.name}", "characterId": "${c1.voiceTag}", "text": "..."},
+  {"role": "host", "speaker": "${h0Short}", "characterId": "${host0.id}", "text": "..."},
+  {"role": "caller", "speaker": "${call1.name}", "characterId": "${c1.voiceTag}", "text": "..."}
+]`;
 
   const topicText = topic || `The current on-air vibe on '${show.title}': ${show.vibe}. Unfiltered Gauteng listeners calling in to air absurd complaints and wild theories.`;
 
-  const host = hosts[0];
-  const hostShort = host.name.split(' ')[0];
-
   const systemInstruction = `You are the lead comedy writer for '${show.title}' on Foul Play FM, a satirical radio station in Gauteng, South Africa inspired by GTA shock jock radio.
 
-THE HOST(S):
-${hostDesc}
+${hostGuidance}
 
 THE 3 PHONE CALLS TO ANSWER:
 Call 1:
 - Telephone Line: Line ${call1.line}
 - Caller Persona: ${c1.archetype} (${c1.voiceTag})
-- Caller Character: ${call1.name} from ${call1.suburb}
+- Caller Character: ${call1.name} from ${call1.suburb} (Gender: ${detectCallerGender(c1)})
 - Satirizing: ${c1.targetOfSatire}
 - Context/Bio: ${c1.aiContextStrategy} ${c1.description}
 
 Call 2:
 - Telephone Line: Line ${call2.line}
 - Caller Persona: ${c2.archetype} (${c2.voiceTag})
-- Caller Character: ${call2.name} from ${call2.suburb}
+- Caller Character: ${call2.name} from ${call2.suburb} (Gender: ${detectCallerGender(c2)})
 - Satirizing: ${c2.targetOfSatire}
 - Context/Bio: ${c2.aiContextStrategy} ${c2.description}
 
 Call 3:
 - Telephone Line: Line ${call3.line}
 - Caller Persona: ${c3.archetype} (${c3.voiceTag})
-- Caller Character: ${call3.name} from ${call3.suburb}
+- Caller Character: ${call3.name} from ${call3.suburb} (Gender: ${detectCallerGender(c3)})
 - Satirizing: ${c3.targetOfSatire}
 - Context/Bio: ${c3.aiContextStrategy} ${c3.description}
 
-CONVERSATION STRUCTURE:
-You must write 3 consecutive, back-to-back phone calls.
-For EACH of the 3 calls, generate EXACTLY 6 turns of rapid-fire dialogue alternating between the Host and the Caller (3 turns for the host, 3 turns for the caller):
-- Turn 1 (Host): Picks up the assigned line and introduces the caller by their name, suburb, and line number in the host's signature style (e.g., "We've got ${call1.name} from ${call1.suburb} on line ${call1.line}, ${call1.name}... what's up?").
-- Turn 2 (Caller): The caller delivers their absurd, unhinged grievance or hot-take in their signature persona style.
-- Turn 3 (Host): Host reacts with shock, mockery, or aggressive disbelief.
-- Turn 4 (Caller): Caller doubles down, yelling buzzwords, citing absurd logic, or repeating their signature catchphrase.
-- Turn 5 (Host): Host delivers a ruthless comedic roast or punchline and dumps/cuts the call.
-- Turn 6 (Caller): Caller gives a desperate, frantic parting scream, insult, or protest right as the line clicks dead or gets cut off mid-sentence (e.g. "Wait, don't cut me off, check my exhaust on TikT—").
+${conversationStructure}
 
 Total: EXACTLY 18 turns (3 calls x 6 turns = 18 turns).
 Keep each line short, punchy (1-2 sentences, max 20 words per line).
 Keep the pacing fast, aggressive, and hilarious. Authentic South African cultural touches (Woolies, Sandton, load shedding, bakkie, braai) are encouraged where appropriate.
 DO NOT include markdown code fences, stage directions, or sound effects in parentheses.
 
-OUTPUT STRICTLY AS A JSON ARRAY OF EXACTLY 18 OBJECTS:
-[
-  {"role": "host", "speaker": "${hostShort}", "characterId": "${host.id}", "text": "We've got ${call1.name} from ${call1.suburb} on line ${call1.line}, ${call1.name}... what's up?"},
-  {"role": "caller", "speaker": "${call1.name}", "characterId": "${c1.voiceTag}", "text": "..."},
-  {"role": "host", "speaker": "${hostShort}", "characterId": "${host.id}", "text": "..."},
-  {"role": "caller", "speaker": "${call1.name}", "characterId": "${c1.voiceTag}", "text": "..."},
-  {"role": "host", "speaker": "${hostShort}", "characterId": "${host.id}", "text": "..."},
-  {"role": "caller", "speaker": "${call1.name}", "characterId": "${c1.voiceTag}", "text": "..."}
-]
+${schemaExample}
 `;
 
   try {
@@ -629,15 +770,44 @@ OUTPUT STRICTLY AS A JSON ARRAY OF EXACTLY 18 OBJECTS:
         const currentCaller = selectedCallers[callIdx] || selectedCallers[0];
         const currentIdentity = callIdentities[callIdx];
 
+        if (isCaller) {
+          return {
+            role: 'caller' as const,
+            speaker: `${currentIdentity.name} (${currentCaller.archetype})`,
+            characterId: currentCaller.voiceTag,
+            voiceId: currentCaller.fishAudioVoiceId || resolveVoiceId(currentCaller, currentCaller.voiceTag),
+            text: sanitizeVoiceScript(t.text),
+          };
+        }
+
+        // Host turn: resolve which host is speaking
+        let turnHost = host0;
+        if (isDuo) {
+          const matchingHost = hosts.find((h) =>
+            h.id === t.characterId ||
+            h.name.toLowerCase().includes((t.speaker || '').toLowerCase()) ||
+            (t.speaker || '').toLowerCase().includes(h.name.split(' ')[0].toLowerCase())
+          );
+
+          if (matchingHost) {
+            turnHost = matchingHost;
+          } else {
+            // Predictable alternation if Gemini didn't specify matching host
+            // Call 1 & 3: host0 leads (turn 0, 4), host1 interjects (turn 2)
+            // Call 2: host1 leads (turn 0, 4), host0 interjects (turn 2)
+            if (callIdx === 1) {
+              turnHost = turnInCall === 2 ? host0 : host1;
+            } else {
+              turnHost = turnInCall === 2 ? host1 : host0;
+            }
+          }
+        }
+
         return {
-          role: isCaller ? ('caller' as const) : ('host' as const),
-          speaker: isCaller
-            ? `${currentIdentity.name} (${currentCaller.archetype})`
-            : hostShort,
-          characterId: isCaller ? currentCaller.voiceTag : host.id,
-          voiceId: isCaller
-            ? (currentCaller.fishAudioVoiceId || undefined)
-            : (host.fishAudioVoiceId || undefined),
+          role: 'host' as const,
+          speaker: turnHost.name.split(' ')[0],
+          characterId: turnHost.id,
+          voiceId: turnHost.fishAudioVoiceId || resolveVoiceId(turnHost, turnHost.id),
           text: sanitizeVoiceScript(t.text),
         };
       });
@@ -651,11 +821,17 @@ OUTPUT STRICTLY AS A JSON ARRAY OF EXACTLY 18 OBJECTS:
   }
 
   // High quality offline fallback with exactly 3 calls x 6 turns = 18 turns
-  const fallbackTurns: DialogueTurn[] = [
-    ...generateSingleCallFallback(host, callIdentities[0]),
-    ...generateSingleCallFallback(host, callIdentities[1]),
-    ...generateSingleCallFallback(host, callIdentities[2]),
-  ];
+  const fallbackTurns: DialogueTurn[] = isDuo
+    ? [
+        ...generateSingleCallFallback(host0, callIdentities[0], host1, host0),
+        ...generateSingleCallFallback(host1, callIdentities[1], host0, host1),
+        ...generateSingleCallFallback(host0, callIdentities[2], host1, host0),
+      ]
+    : [
+        ...generateSingleCallFallback(host0, callIdentities[0]),
+        ...generateSingleCallFallback(host0, callIdentities[1]),
+        ...generateSingleCallFallback(host0, callIdentities[2]),
+      ];
 
   return { turns: fallbackTurns, selectedCallers };
 }
