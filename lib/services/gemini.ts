@@ -528,11 +528,17 @@ export async function generateTripleCallerSegment(
   callers: CallerPersona[],
   topic?: string
 ): Promise<{ turns: DialogueTurn[]; selectedCallers: CallerPersona[] }> {
-  // Select 3 callers, prioritizing those with cloned Fish Audio voice IDs
+  // Select 3 callers strictly from the show's curated allowed callers list!
+  // Prioritize allowed callers who have cloned Fish Audio voice IDs
   const readyCallers = callers.filter((c) => !!c.fishAudioVoiceId);
-  const pool = readyCallers.length >= 3 ? readyCallers : callers;
-  const shuffled = [...pool].sort(() => 0.5 - Math.random());
-  const selectedCallers = shuffled.slice(0, 3);
+  const pool = readyCallers.length >= 3 ? readyCallers : (callers.length > 0 ? callers : readyCallers);
+  const uniquePool = Array.from(new Map(pool.map((c) => [c.voiceTag, c])).values());
+  const shuffled = [...uniquePool].sort(() => 0.5 - Math.random());
+  const selectedCallers = shuffled.slice(0, Math.min(3, shuffled.length));
+  while (selectedCallers.length < 3 && callers.length > 0) {
+    const next = callers.find((c) => !selectedCallers.some((sc) => sc.voiceTag === c.voiceTag)) || callers[0];
+    selectedCallers.push(next);
+  }
   const [c1, c2, c3] = selectedCallers;
 
   const hostDesc = hosts
@@ -622,4 +628,164 @@ OUTPUT STRICTLY AS A JSON ARRAY WITH THIS SCHEMA:
 
   return { turns: fallbackTurns, selectedCallers };
 }
+
+/**
+ * Generates an on-air reaction for the show host(s) immediately following the hourly news bulletin.
+ * Rules:
+ * 1. Sarcastically thank the news crew.
+ * 2. Either mock Gavin Stone (news guy) for being a fucking nerd / spreadsheet geek / doom monger,
+ *    OR mock Simon Carter (traffic guy) for being a wannabe pilot / screeching in a helicopter / thinking he's Top Gun in a lawnmower.
+ * 3. Hosts are fine with the sports anchor Gary Miller (they don't like Gavin or Simon, but Gary is fine).
+ * 4. Strictly embody the hosts' personas, comedy styles, and contrasting dynamics.
+ * 5. Multi-host shows have 2-3 punchy lines of banter; solo hosts have a 1-2 sentence monologue.
+ */
+export async function generatePostBulletinReaction(
+  show: Show,
+  hosts: DJ[]
+): Promise<ShowDialogueTurn[]> {
+  const isDialogue = hosts.length > 1;
+
+  const castList = hosts
+    .map((h) => `- ${h.name} (${h.id}): Parody of ${h.parodyOf}. Personality: ${h.personality}`)
+    .join('\n\n');
+
+  const systemInstruction = `You are the showrunner and head writer for '${show.title}' on Foul Play FM (Vibe: ${show.vibe}).
+
+THE CAST:
+${castList}
+
+SETTING:
+The top-of-the-hour broadcast bulletin just concluded on Foul Play FM:
+1. Gavin Stone (News & Weather): Paranoid, Tucker Carlson-style doom-monger whining about state corruption, crime, and temperatures.
+2. Gary Miller (Sport): Grumpy Roy Keane-style hardass complaining about pampered athletes.
+3. Simon Carter (Traffic Desk / Chopper 1): Screaming into a headset over helicopter noise, panicking about highway traffic jams like a wannabe fighter pilot flying combat missions in a toy helicopter.
+
+COMEDY RULES FOR THE POST-NEWS HOST REACTION:
+1. SARCASTIC THANKS: Sarcastically thank the news crew for their "uplifting" or "stressful" broadcast.
+2. MOCK GAVIN OR SIMON (OR BOTH):
+   - Either roast Gavin Stone for being an insufferable, spreadsheet-hugging, paranoid nerd / dork / buzzkill.
+   - OR roast Simon Carter for being a pathetic wannabe pilot / Top Gun cosplayer / screaming in a two-seater lawnmower / thinking he's Maverick hovering over traffic.
+3. FINE WITH GARY MILLER: None of the hosts like the news guy (Gavin) or the traffic guy (Simon), but they are fine with the sports anchor (Gary) (e.g. "Miller's all right though", "At least Gary tells it like it is", "Miller gets it").
+4. STRICT CHARACTER PERSONA: Embody each host's exact comedic voice, ego, and mannerisms.
+${
+  isDialogue
+    ? `5. DIALOGUE FORMAT: Write a fast, punchy back-and-forth banter (strictly 2 to 3 lines total) between the hosts.
+Output ONLY a valid JSON array of objects:
+[
+  {"speakerId": "${hosts[0].id}", "speakerName": "${hosts[0].name.split(' ')[0]}", "text": "..."},
+  {"speakerId": "${hosts[1].id}", "speakerName": "${hosts[1].name.split(' ')[0]}", "text": "..."}
+]`
+    : `5. MONOLOGUE FORMAT: Write a punchy 1-2 sentence monologue (max 35 words).
+Output ONLY a valid JSON array of objects:
+[
+  {"speakerId": "${hosts[0].id}", "speakerName": "${hosts[0].name.split(' ')[0]}", "text": "..."}
+]`
+}
+No markdown code fences, no stage directions, no asterisks in the text.`;
+
+  try {
+    const raw = await callGemini(systemInstruction, 'Action!');
+    const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+    const turns: ShowDialogueTurn[] = JSON.parse(cleaned);
+    if (Array.isArray(turns) && turns.length > 0) {
+      return turns.map((t, idx) => {
+        const matchingHost = hosts.find(
+          (h) =>
+            h.id === t.speakerId ||
+            h.name.toLowerCase().includes((t.speakerName || '').toLowerCase()) ||
+            (t.speakerName || '').toLowerCase().includes(h.name.split(' ')[0].toLowerCase())
+        );
+        const spk = matchingHost || hosts[idx % hosts.length];
+        return {
+          speakerId: spk.id,
+          speakerName: spk.name.split(' ')[0],
+          text: sanitizeVoiceScript(t.text),
+        };
+      });
+    }
+  } catch (err) {
+    console.warn('Gemini post-bulletin reaction generation failed, using lore fallback:', err);
+  }
+
+  // Lore-accurate character fallbacks
+  const h0 = hosts[0];
+  const h0Short = h0.name.split(' ')[0];
+
+  if (isDialogue) {
+    const h1 = hosts[1];
+    const h1Short = h1.name.split(' ')[0];
+
+    // Show-specific multi-host fallbacks
+    if (show.id.includes('midday') || (h0.id.includes('tony') && h1.id.includes('benny'))) {
+      return [
+        {
+          speakerId: h0.id,
+          speakerName: h0Short,
+          text: 'Huge thanks to our news crew. Gavin, put the spreadsheet down and hit the bench press, you absolute nerd! And Simon, stop screaming like you are in Top Gun, you are hovering over a minibus taxi! Miller is cool though.',
+        },
+        {
+          speakerId: h1.id,
+          speakerName: h1Short,
+          text: 'Yeah... my ears are literally ringing from that helicopter. Let us just play some actual music before Simon crashes into a billboard.',
+        },
+      ];
+    }
+
+    if (show.id.includes('rush-hour') || (h0.id.includes('veronica') && h1.id.includes('cynthia'))) {
+      return [
+        {
+          speakerId: h0.id,
+          speakerName: h0Short,
+          text: 'Thanks boys! Gavin, sweetie, you have the sexual magnetism of a broken calculator. And Simon, honey, nobody thinks you are Tom Cruise in that rental whirlybird.',
+        },
+        {
+          speakerId: h1.id,
+          speakerName: h1Short,
+          text: 'Literally insufferable. At least Gary Miller hates everyone as much as I do. Back to normal programming before Gavin starts crying about potholes again.',
+        },
+      ];
+    }
+
+    return [
+      {
+        speakerId: h0.id,
+        speakerName: h0Short,
+        text: `Thanks to the news crew. Gavin is an insufferable nerd and Simon thinks he is flying fighter jets over Midrand. Gary Miller is the only one with half a brain.`,
+      },
+      {
+        speakerId: h1.id,
+        speakerName: h1Short,
+        text: `Amen to that. Let us get back to the music before Simon screeches in our ears again.`,
+      },
+    ];
+  }
+
+  // Solo host fallbacks
+  const soloFallbacks: Record<string, string> = {
+    'chip-the-fearmonger-walton':
+      'Thanks to Gavin the data nerd for reciting government-approved panic scripts, and Simon for buzzing around like a lunatic mosquito in that surveillance chopper! Gary has the right idea. Back to the music!',
+    'captain-jeff-jeb-mcchad':
+      'Thanks boys. Gavin, you spreadsheet nerd, go eat some elk meat! And Carter, you are not Maverick, you are looking at minivans on the N1 in a lawnmower! Gary is all right though. Back to the tunes!',
+    'gary-the-guru-goldstein':
+      'Thanks news desk. Gavin is trapped in a low-vibration spreadsheet illusion, and Carter is disturbing the cosmic frequency with that toy helicopter. Miller is cool though. Let us flow back to the sound.',
+    'jodie-jinx-johnson':
+      'Thanks for the news, boys. Gavin, you adorable little nerd, go get some fresh air. And Simon, please stop screaming at traffic like you are flying a stealth bomber. Back to the playlist!',
+    'bambi-the-dazzler-mcqueen':
+      'Ugh, thanks boys! Gavin, sweetie, you are such an exhausting nerd. And Simon, stop buzzing that cheap helicopter over my hair! Miller is a sweetheart though. Back to the music!',
+  };
+
+  const text =
+    soloFallbacks[h0.id] ||
+    soloFallbacks[h0.id.replace(/-the-.*?-/, '-')] ||
+    `Thanks to the news crew. Gavin, stop being such a fucking nerd, and Simon, you are not a fighter pilot. Gary Miller gets it though. Let us get right back into the music!`;
+
+  return [
+    {
+      speakerId: h0.id,
+      speakerName: h0Short,
+      text: sanitizeVoiceScript(text),
+    },
+  ];
+}
+
 

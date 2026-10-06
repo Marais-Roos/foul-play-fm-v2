@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useRef, useEffect, useCallb
 import { Show, DJ } from "@/lib/types/station";
 import { stationBible, getCurrentShow, getDJById, getSideCharacterById } from "@/lib/data/station";
 import { JellyfinTrack } from "@/lib/services/jellyfin";
+import { HourlyBulletin } from "@/lib/services/bulletin-service";
 
 export interface VoiceQuipOptions {
   type?: 'quip' | 'traffic' | 'caller' | 'commentary';
@@ -85,6 +86,27 @@ interface PrebufferedVoice {
   text: string;
 }
 
+function playAudioOnce(audio: HTMLAudioElement, src: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let finished = false;
+    const cleanup = () => {
+      if (!finished) {
+        finished = true;
+        audio.removeEventListener('ended', handleEnd);
+        audio.removeEventListener('error', handleError);
+        resolve();
+      }
+    };
+    const handleEnd = () => cleanup();
+    const handleError = () => cleanup();
+
+    audio.addEventListener('ended', handleEnd, { once: true });
+    audio.addEventListener('error', handleError, { once: true });
+    audio.src = src;
+    audio.play().catch(() => cleanup());
+  });
+}
+
 export function AudioPlayerProvider({ children }: { children: React.ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -161,6 +183,41 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const pendingHourlyBulletinRef = useRef<boolean>(false);
   const lastBulletinHourRef = useRef<number>(-1);
   const triggerHourlyBulletinRef = useRef<() => Promise<void>>(async () => {});
+
+  // Bulletin pre-buffering refs
+  const prebufferedBulletinRef = useRef<HourlyBulletin | null>(null);
+  const isBulletinPrebufferingRef = useRef<boolean>(false);
+  const prebufferBulletinPromiseRef = useRef<Promise<HourlyBulletin | null> | null>(null);
+  const prebufferedBulletinHourRef = useRef<number | null>(null);
+
+  const prebufferBulletin = useCallback((targetHour: number, showId?: string) => {
+    if (isBulletinPrebufferingRef.current) return;
+    if (prebufferedBulletinRef.current && prebufferedBulletinHourRef.current === targetHour) return;
+
+    prebufferedBulletinHourRef.current = targetHour;
+    isBulletinPrebufferingRef.current = true;
+
+    const promise = (async () => {
+      try {
+        const sid = showId || currentShowRef.current.id;
+        const res = await fetch(`/api/radio/bulletin?showId=${encodeURIComponent(sid)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.bulletin?.turns) {
+            prebufferedBulletinRef.current = data.bulletin as HourlyBulletin;
+            return data.bulletin as HourlyBulletin;
+          }
+        }
+      } catch (err) {
+        console.warn('Pre-buffering hourly bulletin failed:', err);
+      } finally {
+        isBulletinPrebufferingRef.current = false;
+      }
+      return null;
+    })();
+
+    prebufferBulletinPromiseRef.current = promise;
+  }, []);
 
   useEffect(() => {
     playlistRef.current = playlist;
@@ -982,14 +1039,25 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     });
   }, []);
 
-  // Auto-check live show rollover and top-of-hour bulletin every 15 seconds
+  // Auto-check live show rollover and top-of-hour bulletin every 5 seconds
   useEffect(() => {
     const checkLiveShow = () => {
       const now = new Date();
       const currentHour = now.getHours();
       const currentMinute = now.getMinutes();
+      const nextHour = (currentHour + 1) % 24;
 
-      // Top-of-hour bulletin detection (:00 or :01)
+      // 1. Synthesize bulletin segment earlier:
+      // If program is currently running, start synthesizing news, weather, sport & traffic
+      // at least two minutes before the top of the hour (:58 or :59)
+      if (isPlaying && currentMinute >= 58) {
+        if (prebufferedBulletinHourRef.current !== nextHour && !isBulletinPrebufferingRef.current) {
+          const upcomingShow = getCurrentShow(new Date(now.getTime() + 2 * 60 * 1000));
+          prebufferBulletin(nextHour, upcomingShow.id);
+        }
+      }
+
+      // 2. Top-of-hour bulletin detection (:00 or :01)
       if (currentMinute <= 1 && lastBulletinHourRef.current !== currentHour) {
         lastBulletinHourRef.current = currentHour;
         pendingHourlyBulletinRef.current = true;
@@ -1018,9 +1086,10 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       });
     };
 
-    const interval = setInterval(checkLiveShow, 15000);
+    checkLiveShow();
+    const interval = setInterval(checkLiveShow, 5000);
     return () => clearInterval(interval);
-  }, [isPlaying]);
+  }, [isPlaying, prebufferBulletin]);
 
   const triggerHourlyBulletin = useCallback(async () => {
     if (isBulletinPlayingRef.current) return;
@@ -1028,24 +1097,44 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
     setIsBulletinPlaying(true);
     isBulletinPlayingRef.current = true;
-    setIsGeneratingVoice(true);
+
+    // 1. Duck / pause current music immediately
+    if (musicAudioRef.current && isPlaying) {
+      musicAudioRef.current.pause();
+    }
 
     try {
-      const res = await fetch('/api/radio/bulletin');
-      if (!res.ok) throw new Error('Bulletin fetch failed');
-      const data = await res.json();
-      setIsGeneratingVoice(false);
+      let bulletinData: HourlyBulletin | null = prebufferedBulletinRef.current;
 
-      if (!data.success || !data.bulletin?.turns) {
-        throw new Error('Bulletin returned invalid payload');
+      // If pre-buffering is currently in flight, await it
+      if (!bulletinData && prebufferBulletinPromiseRef.current) {
+        setIsGeneratingVoice(true);
+        bulletinData = await Promise.race([
+          prebufferBulletinPromiseRef.current,
+          new Promise<null>((res) => setTimeout(() => res(null), 10000)),
+        ]);
+        setIsGeneratingVoice(false);
       }
 
-      const { introSweeperUrl, outroSweeperUrl, newsBedUrl, helicopterUrl, turns } = data.bulletin;
-
-      // 1. Duck / pause current music
-      if (musicAudioRef.current && isPlaying) {
-        musicAudioRef.current.pause();
+      // If still not available (e.g. on-demand manual trigger), fetch now
+      if (!bulletinData) {
+        setIsGeneratingVoice(true);
+        const sid = currentShowRef.current.id;
+        const res = await fetch(`/api/radio/bulletin?showId=${encodeURIComponent(sid)}`);
+        if (!res.ok) throw new Error('Bulletin fetch failed');
+        const data = await res.json();
+        setIsGeneratingVoice(false);
+        if (!data.success || !data.bulletin?.turns) {
+          throw new Error('Bulletin returned invalid payload');
+        }
+        bulletinData = data.bulletin;
       }
+
+      if (!bulletinData?.turns) {
+        throw new Error('Bulletin missing turns');
+      }
+
+      const { introSweeperUrl, outroSweeperUrl, newsBedUrl, helicopterUrl, turns, hostReaction } = bulletinData;
 
       // 2. Play News Intro Sweeper (from R2) if present
       if (introSweeperUrl && musicAudioRef.current) {
@@ -1055,12 +1144,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
           title: 'NEWS & TRAFFIC INTRO',
           subtitle: 'Foul Play FM Bulletin',
         });
-        await new Promise<void>((resolve) => {
-          if (!musicAudioRef.current) return resolve();
-          musicAudioRef.current.src = proxyUrl;
-          musicAudioRef.current.onended = () => resolve();
-          musicAudioRef.current.play().catch(() => resolve());
-        });
+        await playAudioOnce(musicAudioRef.current, proxyUrl);
       }
 
       const ctx = audioCtxRef.current;
@@ -1112,13 +1196,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         isVoicePlayingRef.current = true;
 
         if (turn.audioBase64) {
-          await new Promise<void>((resolve) => {
-            if (!voiceAudioRef.current) return resolve();
-            voiceAudioRef.current.src = turn.audioBase64;
-            voiceAudioRef.current.currentTime = 0;
-            voiceAudioRef.current.onended = () => resolve();
-            voiceAudioRef.current.play().catch(() => resolve());
-          });
+          await playAudioOnce(voiceAudioRef.current, turn.audioBase64);
         } else {
           const readingDelay = Math.min(12000, Math.max(4000, (turn.text.split(' ').length / 2.5) * 1000));
           await new Promise((r) => setTimeout(r, readingDelay));
@@ -1148,35 +1226,105 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
           title: 'NEWS & TRAFFIC OUTRO',
           subtitle: 'Foul Play FM Bulletin',
         });
-        await new Promise<void>((resolve) => {
-          if (!musicAudioRef.current) return resolve();
-          musicAudioRef.current.src = proxyOutroUrl;
-          musicAudioRef.current.onended = () => resolve();
-          musicAudioRef.current.play().catch(() => resolve());
-        });
+        await playAudioOnce(musicAudioRef.current, proxyOutroUrl);
       }
+
+      // 7. Post-News Host Reaction:
+      // Host sarcastically thanks the crew, mocks Gavin (nerd) or Simon (wannabe pilot), fine with Gary.
+      if (hostReaction) {
+        setActiveSpeaker(hostReaction.speakerName);
+        setActiveTranscript(hostReaction.text);
+        setCurrentBroadcastItem({
+          type: 'banter',
+          title: currentShowRef.current.title,
+          subtitle: `${hostReaction.speakerName} • Post-News Reaction`,
+        });
+        isVoicePlayingRef.current = true;
+
+        if (hostReaction.audioBase64 && voiceAudioRef.current) {
+          await playAudioOnce(voiceAudioRef.current, hostReaction.audioBase64);
+        } else {
+          const readingDelay = Math.min(10000, Math.max(3000, (hostReaction.text.split(' ').length / 2.5) * 1000));
+          await new Promise((r) => setTimeout(r, readingDelay));
+        }
+
+        setActiveSpeaker(null);
+        setActiveTranscript(null);
+        isVoicePlayingRef.current = false;
+      }
+
+      // 8. Delete cached bulletin once played (both local ref and server cache)
+      prebufferedBulletinRef.current = null;
+      prebufferBulletinPromiseRef.current = null;
+      prebufferedBulletinHourRef.current = null;
+      fetch('/api/radio/bulletin', { method: 'DELETE' }).catch(() => {});
 
       setIsBulletinPlaying(false);
       isBulletinPlayingRef.current = false;
 
-      // 7. Resume show music or show-specific sweeper
+      // 9. Return to normal programming:
+      // Ensure audio event handlers are permanently attached so playback NEVER freezes
       if (musicAudioRef.current) {
-        if (clockStepRef.current === 'INITIAL_SWEEPER') {
-          const sweeper = await fetchRandomR2Asset('random-sweeper', currentShowRef.current.id);
-          if (sweeper && musicAudioRef.current) {
-            setCurrentBroadcastItem({
-              type: 'sweeper',
-              title: 'STATION SWEEPER',
-              subtitle: `${currentShowRef.current.title} • Foul Play FM`,
-            });
-            musicAudioRef.current.src = sweeper.url;
-            musicAudioRef.current.play().catch(() => advanceBroadcastClock());
-          } else {
-            advanceBroadcastClock();
-          }
-        } else {
-          playSongAtCurrentIndex();
-        }
+        musicAudioRef.current.onended = () => {
+          advanceBroadcastClock();
+        };
+        musicAudioRef.current.onerror = () => {
+          advanceBroadcastClock();
+        };
+      }
+      if (voiceAudioRef.current) {
+        voiceAudioRef.current.onended = () => {
+          isVoicePlayingRef.current = false;
+          setActiveSpeaker(null);
+          setActiveTranscript(null);
+          advanceBroadcastClock();
+        };
+      }
+
+      if (clockStepRef.current === 'INITIAL_SWEEPER') {
+        // Show rollover / new show kickoff: Start at track 0 of the new show's playlist
+        currentTrackIndexRef.current = 0;
+        setCurrentTrackIndex(0);
+        clockStepRef.current = 'SONG_1';
+        setClockStep('SONG_1');
+        playSongAtCurrentIndex();
+
+        const currentList = playlistRef.current;
+        const nextIdx = (currentTrackIndexRef.current + 1) % currentList.length;
+        const nextTrack = currentList[nextIdx];
+        triggerPreloadBanter({
+          showId: currentShowRef.current.id,
+          mode: 'intro',
+          isFirstCycle: cycleCountRef.current === 1,
+          nextSongName: nextTrack?.title,
+          nextArtist: nextTrack?.artist,
+        });
+      } else {
+        // Mid-cycle return: Advance track index so we NEVER replay the song that played before the bulletin
+        advanceTrackIndex();
+
+        // Transition to next song step
+        const stepMap: Record<ClockStep, ClockStep> = {
+          'SONG_1': 'SONG_2',
+          'INTRO_BANTER': 'SONG_2',
+          'SONG_2': 'SONG_3',
+          'COMMERCIAL_BREAK_AD': 'SONG_3',
+          'COMMERCIAL_BREAK_SWEEP': 'SONG_3',
+          'MID_SHOW_BANTER': 'SONG_3',
+          'SONG_3': 'SONG_4',
+          'SONG_4': 'SONG_5',
+          'SONG_DISCUSSION': 'SONG_5',
+          'FINAL_AD': 'SONG_5',
+          'POST_AD_SWEEPER': 'SONG_5',
+          'SONG_5': 'INITIAL_SWEEPER',
+          'CALLER_SWEEP': 'INITIAL_SWEEPER',
+          'CALLER_SEGMENT': 'INITIAL_SWEEPER',
+          'INITIAL_SWEEPER': 'SONG_1',
+        };
+        const nextStep = stepMap[clockStepRef.current] || 'SONG_2';
+        clockStepRef.current = nextStep;
+        setClockStep(nextStep);
+        playSongAtCurrentIndex();
       }
     } catch (err) {
       console.error('Hourly bulletin execution error:', err);
@@ -1189,11 +1337,27 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       isBulletinPlayingRef.current = false;
       setActiveSpeaker(null);
       setActiveTranscript(null);
-      if (musicAudioRef.current && isPlaying) {
-        musicAudioRef.current.play().catch(() => {});
+
+      // Restore listeners and advance track on error so station never hangs
+      if (musicAudioRef.current) {
+        musicAudioRef.current.onended = () => {
+          advanceBroadcastClock();
+        };
+        musicAudioRef.current.onerror = () => {
+          advanceBroadcastClock();
+        };
       }
+      advanceTrackIndex();
+      playSongAtCurrentIndex();
     }
-  }, [initAudio, isPlaying, playSongAtCurrentIndex, fetchRandomR2Asset, advanceBroadcastClock]);
+  }, [
+    initAudio,
+    isPlaying,
+    advanceTrackIndex,
+    playSongAtCurrentIndex,
+    triggerPreloadBanter,
+    advanceBroadcastClock,
+  ]);
 
   useEffect(() => {
     triggerHourlyBulletinRef.current = triggerHourlyBulletin;

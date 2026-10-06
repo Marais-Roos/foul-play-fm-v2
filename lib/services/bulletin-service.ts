@@ -1,5 +1,15 @@
-import { sanitizeVoiceScript } from './gemini';
+import { sanitizeVoiceScript, generatePostBulletinReaction } from './gemini';
 import { synthesizeClonedSpeech } from './fish-audio';
+import {
+  fetchSanityShows,
+  fetchSanityPresenters,
+  getShowById,
+  getDJById,
+  getCurrentShow,
+  stationBible,
+  resolveVoiceId,
+} from '@/lib/data/station';
+import { DJ, Show } from '@/lib/types/station';
 
 export interface BulletinTurn {
   anchorId: 'gavin-stone' | 'gary-miller' | 'simon-carter';
@@ -11,6 +21,19 @@ export interface BulletinTurn {
   durationSeconds?: number;
 }
 
+export interface HostReactionItem {
+  speakerName: string;
+  text: string;
+  audioBase64?: string;
+  durationSeconds?: number;
+  turns?: {
+    speakerId: string;
+    speakerName: string;
+    text: string;
+    audioBase64?: string;
+  }[];
+}
+
 export interface HourlyBulletin {
   id: string;
   createdAt: string;
@@ -19,6 +42,7 @@ export interface HourlyBulletin {
   newsBedUrl?: string;
   helicopterUrl?: string;
   turns: BulletinTurn[];
+  hostReaction?: HostReactionItem;
   totalDurationSeconds: number;
 }
 
@@ -44,6 +68,11 @@ const ANCHOR_VOICES: Record<string, { name: string; segment: 'News & Weather' | 
 let cachedBulletin: HourlyBulletin | null = null;
 let lastGeneratedAt = 0;
 const BULLETIN_CACHE_TTL_MS = 5 * 60 * 1000;
+
+export function clearCachedBulletin(): void {
+  cachedBulletin = null;
+  lastGeneratedAt = 0;
+}
 
 /**
  * 1. Fetch real South African News headlines from NewsAPI
@@ -435,40 +464,134 @@ Write the full top-of-the-hour bulletin now.`;
 }
 
 /**
- * 6. Synthesize audio for each bulletin turn with Fish Audio
+ * 6. Synthesize audio for each bulletin turn with Fish Audio, including the post-news host reaction
  */
-export async function buildFullHourlyBulletin(forceRefresh: boolean = false): Promise<HourlyBulletin> {
+export async function buildFullHourlyBulletin(
+  forceRefresh: boolean = false,
+  showId?: string
+): Promise<HourlyBulletin> {
   const now = Date.now();
   if (!forceRefresh && cachedBulletin && now - lastGeneratedAt < BULLETIN_CACHE_TTL_MS) {
     return cachedBulletin;
   }
 
-  const turns = await generateHourlyBulletinScript();
+  // 1. Resolve upcoming / current show and its hosts for the post-news reaction
+  const [sanityShows, sanityPresenters] = await Promise.all([
+    fetchSanityShows(),
+    fetchSanityPresenters(),
+  ]);
 
-  // Synthesize turns in parallel for lightning-fast performance
-  const synthesizedTurns: BulletinTurn[] = await Promise.all(
-    turns.map(async (turn) => {
-      try {
-        const audioBuffer = await synthesizeClonedSpeech(turn.text, turn.voiceId, {
-          model: 's2.1-pro-free',
-          format: 'mp3',
-        });
-        return {
-          ...turn,
-          audioBase64: `data:audio/mp3;base64,${audioBuffer.toString('base64')}`,
-          durationSeconds: Math.ceil(turn.text.split(' ').length / 2.5),
-        };
-      } catch (err) {
-        console.warn(`Fish Audio synthesis failed for ${turn.anchorName}, continuing without audio:`, err);
-        return {
-          ...turn,
-          durationSeconds: Math.ceil(turn.text.split(' ').length / 2.5),
-        };
-      }
-    })
-  );
+  const upcomingDate = new Date(Date.now() + 2 * 60 * 1000);
+  const targetShow =
+    (showId
+      ? sanityShows.find((s) => s.id === showId || s.id.includes(showId) || showId.includes(s.id)) ||
+        getShowById(showId)
+      : null) || getCurrentShow(upcomingDate);
 
-  const totalDuration = synthesizedTurns.reduce((acc, t) => acc + (t.durationSeconds || 20), 0);
+  const hostIds = targetShow.hostIds || [];
+  const hosts = hostIds
+    .map((id) => sanityPresenters.find((p) => p.id === id || p.id.includes(id)) || getDJById(id))
+    .filter((d): d is DJ => !!d);
+  const effectiveHosts = hosts.length > 0 ? hosts : [sanityPresenters[0] || stationBible.djs[0]];
+
+  // 2. Generate both the bulletin turns and the host reaction concurrently
+  const [turns, hostReactionTurns] = await Promise.all([
+    generateHourlyBulletinScript(),
+    generatePostBulletinReaction(targetShow, effectiveHosts),
+  ]);
+
+  // 3. Synthesize bulletin turns and host reaction concurrently
+  const [synthesizedTurns, synthesizedReactionTurns] = await Promise.all([
+    // Bulletin anchor turns
+    Promise.all(
+      turns.map(async (turn) => {
+        try {
+          const audioBuffer = await synthesizeClonedSpeech(turn.text, turn.voiceId, {
+            model: 's2.1-pro-free',
+            format: 'mp3',
+          });
+          return {
+            ...turn,
+            audioBase64: `data:audio/mp3;base64,${audioBuffer.toString('base64')}`,
+            durationSeconds: Math.ceil(turn.text.split(' ').length / 2.5),
+          };
+        } catch (err) {
+          console.warn(`Fish Audio synthesis failed for ${turn.anchorName}, continuing without audio:`, err);
+          return {
+            ...turn,
+            durationSeconds: Math.ceil(turn.text.split(' ').length / 2.5),
+          };
+        }
+      })
+    ),
+    // Host reaction turns
+    Promise.all(
+      hostReactionTurns.map(async (turn) => {
+        const speakerDJ =
+          effectiveHosts.find(
+            (h) => h.id === turn.speakerId || h.name.toLowerCase().includes(turn.speakerName.toLowerCase())
+          ) || effectiveHosts[0];
+        const turnVoiceId = resolveVoiceId(speakerDJ, turn.speakerId);
+
+        try {
+          const audioBuffer = await synthesizeClonedSpeech(turn.text, turnVoiceId, {
+            model: 's2.1-pro-free',
+            format: 'mp3',
+          });
+          return {
+            ...turn,
+            audioBuffer,
+            audioBase64: `data:audio/mp3;base64,${audioBuffer.toString('base64')}`,
+          };
+        } catch (err) {
+          console.warn(`Fish Audio synthesis failed for host reaction ${turn.speakerName}:`, err);
+          return {
+            ...turn,
+            audioBuffer: null as Buffer | null,
+            audioBase64: undefined,
+          };
+        }
+      })
+    ),
+  ]);
+
+  // Build concatenated host reaction audio if buffers exist
+  const reactionBuffers = synthesizedReactionTurns
+    .map((t) => t.audioBuffer)
+    .filter((b): b is Buffer => !!b);
+
+  let hostReactionAudioBase64: string | undefined;
+  if (reactionBuffers.length > 0) {
+    hostReactionAudioBase64 = `data:audio/mp3;base64,${Buffer.concat(reactionBuffers).toString('base64')}`;
+  }
+
+  const isMultiTurnReaction = hostReactionTurns.length > 1;
+  const hostReactionSpeaker = isMultiTurnReaction
+    ? effectiveHosts.map((h) => h.name.split(' ')[0]).join(' & ')
+    : hostReactionTurns[0]?.speakerName || effectiveHosts[0].name;
+
+  const hostReactionText = isMultiTurnReaction
+    ? hostReactionTurns.map((t) => `${t.speakerName}: "${t.text}"`).join('\n')
+    : hostReactionTurns[0]?.text || '';
+
+  const hostReactionDuration = Math.ceil(hostReactionText.split(' ').length / 2.5);
+
+  const hostReaction: HostReactionItem = {
+    speakerName: hostReactionSpeaker,
+    text: hostReactionText,
+    audioBase64: hostReactionAudioBase64,
+    durationSeconds: hostReactionDuration,
+    turns: synthesizedReactionTurns.map((t) => ({
+      speakerId: t.speakerId,
+      speakerName: t.speakerName,
+      text: t.text,
+      audioBase64: t.audioBase64,
+    })),
+  };
+
+  const totalDuration =
+    synthesizedTurns.reduce((acc, t) => acc + (t.durationSeconds || 20), 0) + hostReactionDuration;
+
   const publicBaseUrl = (process.env.R2_PUBLIC_URL || '').replace(/^["']|["']$/g, '').replace(/\/$/, '');
   const introSweeperUrl = publicBaseUrl ? `${publicBaseUrl}/imaging/segments/news/intro/News%20Intro.mp3` : undefined;
   const outroSweeperUrl = introSweeperUrl; // Replays news intro stinger after traffic
@@ -483,6 +606,7 @@ export async function buildFullHourlyBulletin(forceRefresh: boolean = false): Pr
     newsBedUrl,
     helicopterUrl,
     turns: synthesizedTurns,
+    hostReaction,
     totalDurationSeconds: totalDuration,
   };
 

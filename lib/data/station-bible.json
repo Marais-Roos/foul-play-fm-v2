@@ -109,7 +109,19 @@
       "vibe": "Trashy, hilarious, unpredictable, and flirtatious",
       "shortDescription": "Hosted by Bambi \"The Dazzler\" McQueen, this show invites truckers to call in and share their wild stories. It's flirtatious, humorous, and off-the-cuff, perfect for late-night entertainment.",
       "detailedDescription": "Bambi \"The Dazzler\" McQueen invites truckers from across the country to share their wildest tales from the open road. From hilarious mishaps to heartwarming encounters, no story is off-limits. Bambi\u2019s flirtatious charm and quick wit add a playful twist, making this a must-listen for late-night radio fans. With surprise celebrity trucker interviews and a weekly \u201cTacky Awards\u201d for the funniest caller, the show keeps listeners entertained and engaged long into the night.",
-      "jellyfinPlaylistId": "6d8b7386967a86a963160ec021dce1ec"
+      "jellyfinPlaylistId": "6d8b7386967a86a963160ec021dce1ec",
+      "allowedCallerTags": [
+        "THE_VICTIM",
+        "THE_ZEF",
+        "THE_CRACKHEAD",
+        "THE_DIVORCEE",
+        "THE_HUN",
+        "THE_UNCLE",
+        "THE_SPAZA",
+        "THE_MANAGER",
+        "THE_OG",
+        "THE_NPC"
+      ]
     },
     {
       "id": "the-tin-foil-takeover",
@@ -138,7 +150,19 @@
       "vibe": "Paranoid, absurd, intense, and comedic",
       "shortDescription": "Chip \"The Fearmonger\" Walton leads the way as he dives deep into conspiracies, UFO sightings, and government cover-ups. Expect off-the-wall rants, plenty of tinfoil-hat moments, and eerie musings.",
       "detailedDescription": "Chip \"The Fearmonger\" Walton unleashes a whirlwind of conspiratorial chaos, tackling everything from UFO sightings to secret government projects. His dramatic delivery and sharp humor create an electrifying atmosphere, blurring the line between fact and fiction. Guest conspiracy theorists and paranormal experts join regularly to stir the pot, while the \u201cTin Foil Call-In\u201d segment allows listeners to share their own mind-boggling theories. It\u2019s a journey down the rabbit hole for those who love to question reality.",
-      "jellyfinPlaylistId": "a2664f7f5a1b21743128324a2720126e"
+      "jellyfinPlaylistId": "a2664f7f5a1b21743128324a2720126e",
+      "allowedCallerTags": [
+        "THE_TANNIE",
+        "THE_LAWYER",
+        "THE_BOOMER",
+        "THE_NECKBEARD",
+        "THE_CRACKHEAD",
+        "THE_COMRADE",
+        "THE_SCROLLER",
+        "THE_PROFESSOR",
+        "THE_FANBOY",
+        "THE_SPAZA"
+      ]
     },
     {
       "id": "morning-madness",
@@ -166,7 +190,20 @@
       "vibe": "Energetic, sarcastic, irreverent, and fun",
       "shortDescription": "Tony \"The Titan\" Tatum and Veronica \"Vee\" Vixen bring you satirical, hilarious, and irreverent takes on the morning news and celebrity drama.",
       "detailedDescription": "Tony \"The Titan\" Tatum and Veronica \"Vee\" Vixen deliver a morning show like no other, packed with snarky takes on news, absurd celebrity antics, and viral internet trends. Their comedic chemistry turns even mundane topics into laugh-out-loud moments. Signature segments include \u201cThe Daily Roast,\u201d where they poke fun at the most ridiculous headlines, and \u201cVee\u2019s Vicious Rumor Mill,\u201d featuring celebrity gossip with a satirical twist. It\u2019s the perfect chaotic kickstart to your day.",
-      "jellyfinPlaylistId": "8f2d75710b23df4d07d10218263a759e"
+      "jellyfinPlaylistId": "8f2d75710b23df4d07d10218263a759e",
+      "allowedCallerTags": [
+        "THE_BIMBO",
+        "THE_NEPHEW",
+        "THE_FANBOY",
+        "THE_SIMP",
+        "THE_SCROLLER",
+        "THE_MANAGER",
+        "THE_GRIND",
+        "THE_EXPAT",
+        "THE_OPTIMIZER",
+        "THE_SNOB",
+        "THE_LAWYER"
+      ]
     },
     {
       "id": "the-wacky-hour",
@@ -196,7 +233,19 @@
       "vibe": "Quirky, lighthearted, humorous, and slightly cynical",
       "shortDescription": "Hosted by Benny \"The Sloth\" St. Pierre and Cynthia \"Cyn\" Blight, this show explores the weirdest of the weird\u2014strange news stories, absurd facts, and hilariously bizarre cultural moments.",
       "detailedDescription": "Benny \"The Sloth\" St. Pierre and Cynthia \"Cyn\" Blight dive into the bizarre and unexpected, covering strange news stories, odd trivia, and cultural oddities. From haunted toasters to Guinness World Records no one asked for, every episode is a trip into the surreal. Fan-favorite segments like \u201cWhat the What?!\u201d and \u201cCyn\u2019s Crazy Corner\u201d keep listeners coming back for more, while Benny\u2019s laid-back vibe balances Cyn\u2019s fiery energy for a hilarious dynamic.",
-      "jellyfinPlaylistId": "248227de5ddcc5549b9f5a0056016e03"
+      "jellyfinPlaylistId": "248227de5ddcc5549b9f5a0056016e03",
+      "allowedCallerTags": [
+        "THE_NPC",
+        "THE_SNOB",
+        "THE_PROFESSOR",
+        "THE_CRACKHEAD",
+        "THE_BOOMER",
+        "THE_TANNIE",
+        "THE_ZEF",
+        "THE_BIMBO",
+        "THE_FANBOY",
+        "THE_SPAZA"
+      ]
     },
     {
       "id": "midday-mayhem",
@@ -225,7 +274,20 @@
       "vibe": "Chaotic, combative, edgy, and unpredictable",
       "shortDescription": "Gary \"The Guru\" Goldstein and Jodie \"Jinx\" Johnson get into heavy commentary on political discourse, current events, and the ridiculousness of modern life. Expect no sugarcoating here.",
       "detailedDescription": "Gary \"The Guru\" Goldstein and Jodie \"Jinx\" Johnson tackle serious topics with unfiltered opinions, diving headfirst into political controversies, societal debates, and pop culture absurdities. Their bold, no-nonsense approach makes this show a favorite for listeners looking for unapologetic commentary. Highlights include their recurring debates on \u201cHot Takes with Jinx & Guru\u201d and call-in rants from passionate listeners who want to join the chaos. Expect sharp insights mixed with humor that cuts through the noise.",
-      "jellyfinPlaylistId": "0c510734ea7314d0f71fd6d21625d36d"
+      "jellyfinPlaylistId": "0c510734ea7314d0f71fd6d21625d36d",
+      "allowedCallerTags": [
+        "THE_UNCLE",
+        "THE_COMRADE",
+        "THE_EXPAT",
+        "THE_SPAZA",
+        "THE_GRIND",
+        "THE_NEPHEW",
+        "THE_MANAGER",
+        "THE_SCROLLER",
+        "THE_SIMP",
+        "THE_LAWYER",
+        "THE_PROFESSOR"
+      ]
     },
     {
       "id": "rush-hour-rants",
@@ -254,7 +316,19 @@
       "vibe": "Frenetic, loud, fiery, and opinionated",
       "shortDescription": "Captain Jeff \"Jeb\" McChad and Cynthia \"Cyn\" Blight fire up the airwaves with no-holds-barred rants about society, politics, and everything else that drives them mad during rush hour.",
       "detailedDescription": "Captain Jeff \"Jeb\" McChad and Cynthia \"Cyn\" Blight turn the frustrations of rush hour into an uproarious venting session. Their fiery, unfiltered discussions on politics, culture, and social norms resonate with listeners stuck in traffic. Regular segments like \u201cRoad Rage Roundup,\u201d where callers share their commute nightmares, and \u201cCyn\u2019s Savage Sermons\u201d make this the perfect soundtrack for letting off steam after a long day.",
-      "jellyfinPlaylistId": "d685018f8168ae0a30aa9e28aae2cced"
+      "jellyfinPlaylistId": "d685018f8168ae0a30aa9e28aae2cced",
+      "allowedCallerTags": [
+        "THE_GRIND",
+        "THE_MANAGER",
+        "THE_OPTIMIZER",
+        "THE_DIVORCEE",
+        "THE_VICTIM",
+        "THE_ZEF",
+        "THE_UNCLE",
+        "THE_SIMP",
+        "THE_COMRADE",
+        "THE_BOOMER"
+      ]
     },
     {
       "id": "the-funky-hour",
@@ -285,7 +359,18 @@
       "vibe": "Smooth, funky, playful, and nostalgic",
       "shortDescription": "Benny \"The Sloth\" St. Pierre and Gary \"The Guru\" Goldstein play the best funk, soul, and jazz, while delving into music history and offering interesting interviews with the coolest artists.",
       "detailedDescription": "Benny \"The Sloth\" St. Pierre and Gary \"The Guru\" Goldstein turn up the groove with a show dedicated to funk, soul, and jazz. They explore music history, highlight underrated artists, and share captivating stories behind legendary tracks. Regular features like \u201cFunky Finds\u201d introduce listeners to hidden gems, while interviews with musicians offer insights into the world of funk. It\u2019s a soulful escape filled with good vibes and toe-tapping beats.",
-      "jellyfinPlaylistId": "8f2d75710b23df4d07d10218263a759e"
+      "jellyfinPlaylistId": "8f2d75710b23df4d07d10218263a759e",
+      "allowedCallerTags": [
+        "THE_OG",
+        "THE_SNOB",
+        "THE_PROFESSOR",
+        "THE_BOOMER",
+        "THE_EXPAT",
+        "THE_SIMP",
+        "THE_OPTIMIZER",
+        "THE_FANBOY",
+        "THE_VICTIM"
+      ]
     },
     {
       "id": "after-dark-descent",
@@ -316,7 +401,19 @@
       "vibe": "Mysterious, moody, edgy, and slightly raunchy",
       "shortDescription": "Tony \"The Titan\" Tatum and Veronica \"Vee\" Vixen bring the edge with celebrity gossip, pop culture scandals, and late-night dark humor. Prepare for something moody and edgy!",
       "detailedDescription": "Tony \"The Titan\" Tatum and Veronica \"Vee\" Vixen take listeners into the darker side of pop culture with biting humor and edgy commentary. Late-night topics range from juicy celebrity scandals to internet meltdowns, creating a thrilling mix of drama and comedy. The \u201cScandal Spotlight\u201d dives deep into the week\u2019s most outrageous stories, while \u201cVee\u2019s Shadow Room\u201d explores mysterious and macabre pop culture phenomena. It\u2019s a show for night owls craving a mix of wit, grit, and intrigue.",
-      "jellyfinPlaylistId": "a2664f7f5a1b21743128324a2720126e"
+      "jellyfinPlaylistId": "a2664f7f5a1b21743128324a2720126e",
+      "allowedCallerTags": [
+        "THE_DIVORCEE",
+        "THE_NECKBEARD",
+        "THE_NEPHEW",
+        "THE_SCROLLER",
+        "THE_BIMBO",
+        "THE_CRACKHEAD",
+        "THE_HUN",
+        "THE_ZEF",
+        "THE_LAWYER",
+        "THE_GRIND"
+      ]
     }
   ],
   "djs": [

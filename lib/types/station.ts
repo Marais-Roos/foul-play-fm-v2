@@ -44,6 +44,7 @@ export interface Show {
   imageUrl?: string;
   sideCharacters?: SideCharacter[];
   callers?: CallerPersona[];
+  allowedCallerTags?: string[];
 }
 
 export interface DJ {
