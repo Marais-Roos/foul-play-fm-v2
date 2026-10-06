@@ -152,44 +152,37 @@ export async function POST(request: NextRequest) {
         ? allowedShowCallers
         : sanityCallers;
 
+      // Filter strictly for callers with active Fish Audio voice IDs
+      const readyShowCallers = effectiveCallers.filter((c) => !!c.fishAudioVoiceId);
+      const readyAllCallers = sanityCallers.filter((c) => !!c.fishAudioVoiceId);
+      const eligibleCallers = readyShowCallers.length >= 3 ? readyShowCallers : readyAllCallers;
+
       const { turns, selectedCallers } = await generateTripleCallerSegment(
         show,
         effectiveHosts,
-        effectiveCallers,
+        eligibleCallers,
         topic
       );
 
-      // Map callers by voice tag and id for robust lookup
-      const callerMap = new Map<string, (typeof sanityCallers)[0]>();
-      sanityCallers.forEach((c) => {
-        callerMap.set(c.voiceTag.toLowerCase(), c);
-        callerMap.set(c.id.toLowerCase(), c);
-      });
-
       // Synthesize each turn with its character's cloned voice model in batches of 3
+      const hostVoiceId = resolveVoiceId(effectiveHosts[0]);
       const turnBuffers: Buffer[] = [];
       const BATCH_SIZE = 3;
       for (let i = 0; i < turns.length; i += BATCH_SIZE) {
         const chunk = turns.slice(i, i + BATCH_SIZE);
         const chunkBuffers = await Promise.all(
-          chunk.map(async (turn) => {
-            let voiceId: string;
-            if (turn.role === 'caller') {
-              const matchingCaller =
-                callerMap.get(turn.characterId.toLowerCase()) ||
-                selectedCallers.find(
-                  (c) =>
-                    c.voiceTag.toLowerCase() === turn.characterId.toLowerCase() ||
-                    c.archetype.toLowerCase() === turn.speaker.toLowerCase()
-                );
-              voiceId = resolveVoiceId(matchingCaller, turn.characterId);
-            } else {
-              const speakerDJ =
-                effectiveHosts.find(
-                  (h) => h.id === turn.characterId || h.name.toLowerCase().includes(turn.speaker.toLowerCase())
-                ) || effectiveHosts[0];
-              voiceId = resolveVoiceId(speakerDJ, turn.characterId);
-            }
+          chunk.map(async (turn, chunkIdx) => {
+            const globalIdx = i + chunkIdx;
+            const callIdx = Math.min(2, Math.floor(globalIdx / 6));
+            const isCaller = globalIdx % 2 === 1;
+            const currentCaller = selectedCallers[callIdx] || selectedCallers[0];
+
+            // Deterministic voice resolution: direct voiceId from turn -> current caller/host voice
+            const voiceId =
+              turn.voiceId ||
+              (isCaller
+                ? (currentCaller.fishAudioVoiceId || resolveVoiceId(currentCaller, currentCaller.voiceTag))
+                : hostVoiceId);
 
             return synthesizeClonedSpeech(turn.text, voiceId, {
               model: 's2.1-pro-free',

@@ -38,7 +38,6 @@ export interface HourlyBulletin {
   id: string;
   createdAt: string;
   introSweeperUrl?: string;
-  outroSweeperUrl?: string;
   newsBedUrl?: string;
   helicopterUrl?: string;
   turns: BulletinTurn[];
@@ -594,7 +593,6 @@ export async function buildFullHourlyBulletin(
 
   const publicBaseUrl = (process.env.R2_PUBLIC_URL || '').replace(/^["']|["']$/g, '').replace(/\/$/, '');
   const introSweeperUrl = publicBaseUrl ? `${publicBaseUrl}/imaging/segments/news/intro/News%20Intro.mp3` : undefined;
-  const outroSweeperUrl = introSweeperUrl; // Replays news intro stinger after traffic
   const newsBedUrl = publicBaseUrl ? `${publicBaseUrl}/imaging/segments/news/beds/news-bed.mp3` : undefined;
   const helicopterUrl = publicBaseUrl ? `${publicBaseUrl}/imaging/segments/traffic/helicopter.mp3` : undefined;
 
@@ -602,7 +600,6 @@ export async function buildFullHourlyBulletin(
     id: `bulletin-${Date.now()}`,
     createdAt: new Date().toISOString(),
     introSweeperUrl,
-    outroSweeperUrl,
     newsBedUrl,
     helicopterUrl,
     turns: synthesizedTurns,

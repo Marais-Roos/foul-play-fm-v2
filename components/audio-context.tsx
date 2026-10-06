@@ -163,9 +163,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   const musicAudioRef = useRef<HTMLAudioElement | null>(null);
   const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
   const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
+  const bulletinAudioRef = useRef<HTMLAudioElement | null>(null);
   const musicGainRef = useRef<GainNode | null>(null);
   const voiceGainRef = useRef<GainNode | null>(null);
   const ambientGainRef = useRef<GainNode | null>(null);
+  const bulletinGainRef = useRef<GainNode | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
   const isVoicePlayingRef = useRef<boolean>(false);
 
@@ -319,9 +321,29 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   }, []);
 
   // Helper to play the song at currentTrackIndex
-  const playSongAtCurrentIndex = useCallback(() => {
-    const list = playlistRef.current;
-    const track = list[currentTrackIndexRef.current];
+  const playSongAtCurrentIndex = useCallback(async () => {
+    let list = playlistRef.current;
+    if ((!list || list.length === 0) && currentShowRef.current) {
+      try {
+        const params = new URLSearchParams({ showId: currentShowRef.current.id });
+        if (currentShowRef.current.jellyfinPlaylistId) {
+          params.set('playlistId', currentShowRef.current.jellyfinPlaylistId);
+        }
+        const res = await fetch(`/api/radio/tracks?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.tracks && data.tracks.length > 0) {
+            list = shuffleList<JellyfinTrack>(data.tracks);
+            playlistRef.current = list;
+            setPlaylist(list);
+          }
+        }
+      } catch (e) {
+        console.warn('Fallback playlist fetch error:', e);
+      }
+    }
+
+    const track = list && list.length > 0 ? list[currentTrackIndexRef.current % list.length] : null;
     if (track && musicAudioRef.current) {
       const stampedTrack = recordSongStart(track);
 
@@ -341,12 +363,18 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
   // Master Broadcast Clock State Machine
   const advanceBroadcastClock = useCallback(async () => {
+    // If a news bulletin is actively playing, never advance the broadcast clock
+    if (isBulletinPlayingRef.current) {
+      return;
+    }
+
     const currentStep = clockStepRef.current;
     const currentList = playlistRef.current;
     const show = currentShowRef.current;
 
     // Handle scheduled live show transition or top of hour bulletin at natural track boundary!
     if (pendingHourlyBulletinRef.current || pendingShowTransitionRef.current) {
+      const hasBulletin = pendingHourlyBulletinRef.current;
       const isShowChange = pendingShowTransitionRef.current;
       pendingHourlyBulletinRef.current = false;
       pendingShowTransitionRef.current = false;
@@ -362,9 +390,23 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         setActiveTranscript(null);
       }
 
-      if (triggerHourlyBulletinRef.current) {
+      if (hasBulletin && triggerHourlyBulletinRef.current) {
         await triggerHourlyBulletinRef.current();
         return;
+      }
+
+      if (isShowChange) {
+        const sweeper = await fetchRandomR2Asset('random-sweeper', show.id);
+        if (sweeper && musicAudioRef.current) {
+          setCurrentBroadcastItem({
+            type: 'sweeper',
+            title: 'STATION SWEEPER',
+            subtitle: sweeper.name,
+          });
+          musicAudioRef.current.src = sweeper.url;
+          musicAudioRef.current.play().catch(() => advanceBroadcastClock());
+          return;
+        }
       }
     }
 
@@ -712,6 +754,9 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
   ]);
 
   const skipTrack = useCallback(() => {
+    // If a bulletin is in progress, ignore manual track skipping
+    if (isBulletinPlayingRef.current) return;
+
     // If voice is currently speaking, stop it cleanly
     if (isVoicePlayingRef.current && voiceAudioRef.current) {
       voiceAudioRef.current.pause();
@@ -771,9 +816,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     const musicAudio = new Audio();
     musicAudio.crossOrigin = "anonymous";
     musicAudio.onended = () => {
+      if (isBulletinPlayingRef.current) return;
       advanceBroadcastClock();
     };
     musicAudio.onerror = () => {
+      if (isBulletinPlayingRef.current) return;
       console.warn("Music audio channel error, advancing clock");
       advanceBroadcastClock();
     };
@@ -790,12 +837,14 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     const voiceAudio = new Audio();
     voiceAudio.crossOrigin = "anonymous";
     voiceAudio.onended = () => {
+      if (isBulletinPlayingRef.current) return;
       isVoicePlayingRef.current = false;
       setActiveSpeaker(null);
       setActiveTranscript(null);
       advanceBroadcastClock();
     };
     voiceAudio.onerror = () => {
+      if (isBulletinPlayingRef.current) return;
       console.warn("Voice audio channel error, advancing clock");
       isVoicePlayingRef.current = false;
       setActiveSpeaker(null);
@@ -823,6 +872,18 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     ambientSource.connect(ambientGain);
     ambientGain.connect(masterGain);
     ambientGainRef.current = ambientGain;
+
+    // Bulletin Channel (dedicated isolated channel for hourly news bulletins & host reactions)
+    const bulletinAudio = new Audio();
+    bulletinAudio.crossOrigin = "anonymous";
+    bulletinAudioRef.current = bulletinAudio;
+
+    const bulletinSource = ctx.createMediaElementSource(bulletinAudio);
+    const bulletinGain = ctx.createGain();
+    bulletinGain.gain.setValueAtTime(1.0, ctx.currentTime);
+    bulletinSource.connect(bulletinGain);
+    bulletinGain.connect(masterGain);
+    bulletinGainRef.current = bulletinGain;
   }, [volume, advanceBroadcastClock]);
 
   // Tick the show clock every second
@@ -842,6 +903,17 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     }
 
     setIsPlaying(true);
+
+    // If bulletin is currently in progress, resume bulletin audio and ambient audio
+    if (isBulletinPlayingRef.current) {
+      if (bulletinAudioRef.current && bulletinAudioRef.current.src && bulletinAudioRef.current.paused) {
+        bulletinAudioRef.current.play().catch(() => {});
+      }
+      if (ambientAudioRef.current && ambientAudioRef.current.src && ambientAudioRef.current.paused) {
+        ambientAudioRef.current.play().catch(() => {});
+      }
+      return;
+    }
 
     // If currently paused in the middle of music/ad/sweeper, resume
     if (musicAudioRef.current.src && musicAudioRef.current.paused && !isVoicePlayingRef.current) {
@@ -876,11 +948,6 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       }
     }
 
-    // Resume ambient background audio if bulletin was in progress
-    if (ambientAudioRef.current && isBulletinPlayingRef.current && ambientAudioRef.current.src && ambientAudioRef.current.paused) {
-      ambientAudioRef.current.play().catch(() => {});
-    }
-
     // Otherwise, step clock
     advanceBroadcastClock();
   }, [initAudio, fetchRandomR2Asset, advanceBroadcastClock]);
@@ -894,6 +961,9 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     }
     if (ambientAudioRef.current) {
       ambientAudioRef.current.pause();
+    }
+    if (bulletinAudioRef.current) {
+      bulletinAudioRef.current.pause();
     }
     setIsPlaying(false);
   }, []);
@@ -1098,9 +1168,13 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     setIsBulletinPlaying(true);
     isBulletinPlayingRef.current = true;
 
-    // 1. Duck / pause current music immediately
+    // 1. Duck / pause current music & voice immediately
     if (musicAudioRef.current && isPlaying) {
       musicAudioRef.current.pause();
+    }
+    if (voiceAudioRef.current && isVoicePlayingRef.current) {
+      voiceAudioRef.current.pause();
+      isVoicePlayingRef.current = false;
     }
 
     try {
@@ -1134,17 +1208,17 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         throw new Error('Bulletin missing turns');
       }
 
-      const { introSweeperUrl, outroSweeperUrl, newsBedUrl, helicopterUrl, turns, hostReaction } = bulletinData;
+      const { introSweeperUrl, newsBedUrl, helicopterUrl, turns, hostReaction } = bulletinData;
 
-      // 2. Play News Intro Sweeper (from R2) if present
-      if (introSweeperUrl && musicAudioRef.current) {
+      // 2. Play News Intro Sweeper (from R2) on dedicated bulletin audio channel
+      if (introSweeperUrl && bulletinAudioRef.current) {
         const proxyUrl = `/api/radio/asset-stream?url=${encodeURIComponent(introSweeperUrl)}`;
         setCurrentBroadcastItem({
           type: 'sweeper',
           title: 'NEWS & TRAFFIC INTRO',
           subtitle: 'Foul Play FM Bulletin',
         });
-        await playAudioOnce(musicAudioRef.current, proxyUrl);
+        await playAudioOnce(bulletinAudioRef.current, proxyUrl);
       }
 
       const ctx = audioCtxRef.current;
@@ -1162,12 +1236,12 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         ambientAudio.play().catch((e) => console.warn('News bed play error:', e));
       }
 
-      // 4. Sequentially broadcast all 3 anchor turns:
+      // 4. Sequentially broadcast all 3 anchor turns on dedicated bulletin channel:
       // Turn 1: Gavin Stone (News & Weather - over news bed)
       // Turn 2: Gary Miller (Sport - over news bed)
       // Turn 3: Simon Carter (Chopper 1 Traffic - transitions to helicopter audio!)
       for (const turn of turns) {
-        if (!voiceAudioRef.current) continue;
+        if (!bulletinAudioRef.current) continue;
 
         const isTrafficTurn = turn.anchorId === 'simon-carter' || turn.segment === 'Traffic Desk';
 
@@ -1193,10 +1267,9 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
           title: `${turn.anchorName} • ${turn.segment}`,
           subtitle: 'Live Bulletin',
         });
-        isVoicePlayingRef.current = true;
 
         if (turn.audioBase64) {
-          await playAudioOnce(voiceAudioRef.current, turn.audioBase64);
+          await playAudioOnce(bulletinAudioRef.current, turn.audioBase64);
         } else {
           const readingDelay = Math.min(12000, Math.max(4000, (turn.text.split(' ').length / 2.5) * 1000));
           await new Promise((r) => setTimeout(r, readingDelay));
@@ -1215,21 +1288,8 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
       setActiveSpeaker(null);
       setActiveTranscript(null);
-      isVoicePlayingRef.current = false;
 
-      // 6. Play News Outro / Stinger (replays news intro stinger after traffic finishes)
-      const outroUrl = outroSweeperUrl || introSweeperUrl;
-      if (outroUrl && musicAudioRef.current) {
-        const proxyOutroUrl = `/api/radio/asset-stream?url=${encodeURIComponent(outroUrl)}`;
-        setCurrentBroadcastItem({
-          type: 'sweeper',
-          title: 'NEWS & TRAFFIC OUTRO',
-          subtitle: 'Foul Play FM Bulletin',
-        });
-        await playAudioOnce(musicAudioRef.current, proxyOutroUrl);
-      }
-
-      // 7. Post-News Host Reaction:
+      // 6. Post-News Host Reaction (no news outro sweep - host reacts immediately):
       // Host sarcastically thanks the crew, mocks Gavin (nerd) or Simon (wannabe pilot), fine with Gary.
       if (hostReaction) {
         setActiveSpeaker(hostReaction.speakerName);
@@ -1239,10 +1299,9 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
           title: currentShowRef.current.title,
           subtitle: `${hostReaction.speakerName} • Post-News Reaction`,
         });
-        isVoicePlayingRef.current = true;
 
-        if (hostReaction.audioBase64 && voiceAudioRef.current) {
-          await playAudioOnce(voiceAudioRef.current, hostReaction.audioBase64);
+        if (hostReaction.audioBase64 && bulletinAudioRef.current) {
+          await playAudioOnce(bulletinAudioRef.current, hostReaction.audioBase64);
         } else {
           const readingDelay = Math.min(10000, Math.max(3000, (hostReaction.text.split(' ').length / 2.5) * 1000));
           await new Promise((r) => setTimeout(r, readingDelay));
@@ -1250,10 +1309,9 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
 
         setActiveSpeaker(null);
         setActiveTranscript(null);
-        isVoicePlayingRef.current = false;
       }
 
-      // 8. Delete cached bulletin once played (both local ref and server cache)
+      // 7. Delete cached bulletin once played (both local ref and server cache)
       prebufferedBulletinRef.current = null;
       prebufferBulletinPromiseRef.current = null;
       prebufferedBulletinHourRef.current = null;
@@ -1262,18 +1320,21 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       setIsBulletinPlaying(false);
       isBulletinPlayingRef.current = false;
 
-      // 9. Return to normal programming:
+      // 8. Return to normal programming:
       // Ensure audio event handlers are permanently attached so playback NEVER freezes
       if (musicAudioRef.current) {
         musicAudioRef.current.onended = () => {
+          if (isBulletinPlayingRef.current) return;
           advanceBroadcastClock();
         };
         musicAudioRef.current.onerror = () => {
+          if (isBulletinPlayingRef.current) return;
           advanceBroadcastClock();
         };
       }
       if (voiceAudioRef.current) {
         voiceAudioRef.current.onended = () => {
+          if (isBulletinPlayingRef.current) return;
           isVoicePlayingRef.current = false;
           setActiveSpeaker(null);
           setActiveTranscript(null);
@@ -1281,8 +1342,9 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         };
       }
 
-      if (clockStepRef.current === 'INITIAL_SWEEPER') {
+      if (clockStepRef.current === 'INITIAL_SWEEPER' || pendingShowTransitionRef.current) {
         // Show rollover / new show kickoff: Start at track 0 of the new show's playlist
+        pendingShowTransitionRef.current = false;
         currentTrackIndexRef.current = 0;
         setCurrentTrackIndex(0);
         clockStepRef.current = 'SONG_1';
@@ -1290,7 +1352,7 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         playSongAtCurrentIndex();
 
         const currentList = playlistRef.current;
-        const nextIdx = (currentTrackIndexRef.current + 1) % currentList.length;
+        const nextIdx = (currentTrackIndexRef.current + 1) % (currentList.length || 1);
         const nextTrack = currentList[nextIdx];
         triggerPreloadBanter({
           showId: currentShowRef.current.id,
@@ -1332,6 +1394,10 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
         ambientAudioRef.current.pause();
         ambientAudioRef.current.currentTime = 0;
       }
+      if (bulletinAudioRef.current) {
+        bulletinAudioRef.current.pause();
+        bulletinAudioRef.current.currentTime = 0;
+      }
       setIsGeneratingVoice(false);
       setIsBulletinPlaying(false);
       isBulletinPlayingRef.current = false;
@@ -1341,9 +1407,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
       // Restore listeners and advance track on error so station never hangs
       if (musicAudioRef.current) {
         musicAudioRef.current.onended = () => {
+          if (isBulletinPlayingRef.current) return;
           advanceBroadcastClock();
         };
         musicAudioRef.current.onerror = () => {
+          if (isBulletinPlayingRef.current) return;
           advanceBroadcastClock();
         };
       }
