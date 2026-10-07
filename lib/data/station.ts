@@ -61,6 +61,9 @@ export async function fetchSanityShows(): Promise<Show[]> {
         const hostNames = s.hosts?.map((h: any) => h.name).join(' & ') || 'Live Host';
         const localShow = findMatchingShow(s.slug || s._id, s.title, stationBible.shows);
         
+        const rawCoverImage = s.thumbnailWithOverlay || s.imageWithOverlay || s.coverImage;
+        const rawCleanImage = s.thumbnailWithoutOverlay || s.imageWithoutOverlay;
+
         const sideCharacters: SideCharacter[] = (s.sideCharacters || []).map((sc: any) => ({
           id: sc.slug || sc._id,
           name: sc.name,
@@ -72,6 +75,10 @@ export async function fetchSanityShows(): Promise<Show[]> {
           recommendedPreviewText: '',
           voiceSampleFile: '',
           fishAudioVoiceId: sc.fishAudioVoiceId || null,
+          image: sc.thumbnailImage || sc.image,
+          thumbnailImage: sc.thumbnailImage || sc.image,
+          backdropImage: sc.backdropImage,
+          voiceSampleUrl: sc.voiceSampleUrl,
         }));
 
         const callers: CallerPersona[] = (s.callers && s.callers.length > 0)
@@ -115,10 +122,12 @@ export async function fetchSanityShows(): Promise<Show[]> {
           },
           hostIds: hostIds.length > 0 ? hostIds : (localShow?.hostIds || []),
           hostNames: hostNames || (localShow?.hostNames || 'Live Host'),
-          imageUrl: (s.imageWithOverlay || s.coverImage) ? undefined : (localShow?.imageUrl || DEFAULT_SHOW_IMAGES[s.slug || s._id]),
-          coverImage: s.imageWithOverlay || s.coverImage,
-          imageWithOverlay: s.imageWithOverlay || s.coverImage,
-          imageWithoutOverlay: s.imageWithoutOverlay,
+          imageUrl: (rawCoverImage || rawCleanImage) ? undefined : (localShow?.imageUrl || DEFAULT_SHOW_IMAGES[s.slug || s._id]),
+          coverImage: rawCoverImage,
+          thumbnailWithOverlay: rawCoverImage,
+          imageWithOverlay: rawCoverImage,
+          thumbnailWithoutOverlay: rawCleanImage,
+          imageWithoutOverlay: rawCleanImage,
           studioImage: s.studioImage,
           sideCharacters: sideCharacters.length > 0 ? sideCharacters : undefined,
           callers: callers.length > 0 ? callers : undefined,
@@ -211,6 +220,10 @@ export async function fetchSanityPresenters(): Promise<DJ[]> {
           fishAudioVoiceId: p.fishAudioVoiceId || localDj?.fishAudioVoiceId || null,
           voicePrompt: p.voicePrompt,
           bio: p.bio,
+          image: p.thumbnailImage || p.image,
+          thumbnailImage: p.thumbnailImage || p.image,
+          backdropImage: p.backdropImage,
+          voiceSampleUrl: p.voiceSampleUrl,
         };
       });
       cachedSanityDJs = mapped;
@@ -251,6 +264,10 @@ export async function fetchSanitySideCharacters(): Promise<SideCharacter[]> {
           recommendedPreviewText: localSc?.recommendedPreviewText || '',
           voiceSampleFile: localSc?.voiceSampleFile || '',
           fishAudioVoiceId: sc.fishAudioVoiceId || localSc?.fishAudioVoiceId || null,
+          image: sc.thumbnailImage || sc.image,
+          thumbnailImage: sc.thumbnailImage || sc.image,
+          backdropImage: sc.backdropImage,
+          voiceSampleUrl: sc.voiceSampleUrl,
         };
       });
       cachedSanitySideCharacters = mapped;

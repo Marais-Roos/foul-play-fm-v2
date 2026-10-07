@@ -14,10 +14,10 @@ export function ShowsView({ shows }: ShowsViewProps) {
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold tracking-tight text-[#F3F4F6] font-[family-name:var(--font-heading)]">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground font-heading">
           24-Hour Programming Schedule
         </h1>
-        <p className="text-sm text-[#9CA3AF]">
+        <p className="text-sm text-zinc-400">
           Daily broadcast blocks synced from Sanity CMS. Click any show to tune in.
         </p>
       </div>
@@ -26,9 +26,9 @@ export function ShowsView({ shows }: ShowsViewProps) {
         {displayShows.map((show, idx) => (
           <div key={show._id || show.id || idx} className="flex flex-col gap-2">
             <ShowCard show={show} index={idx} />
-            <div className="p-3 rounded-xl bg-[#141414] border border-[#232326] space-y-2">
-              <div className="flex items-center justify-between text-xs text-[#9CA3AF]">
-                <span className="font-mono text-[#CCFF00] font-bold">
+            <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-2">
+              <div className="flex items-center justify-between text-xs text-zinc-400">
+                <span className="font-mono text-accent-lime font-bold">
                   {typeof show.timeSlot === "number"
                     ? `${show.timeSlot.toString().padStart(2, "0")}:00 – ${((show.timeSlot + 3) % 24).toString().padStart(2, "0")}:00`
                     : show.timeSlot?.start
@@ -36,12 +36,12 @@ export function ShowsView({ shows }: ShowsViewProps) {
                     : "00:00"}
                 </span>
                 {show.vibe && (
-                  <span className="px-2 py-0.5 rounded bg-[#242426] text-[10px] uppercase font-semibold text-[#A1A1AA]">
+                  <span className="px-2 py-0.5 rounded bg-zinc-800 text-[10px] uppercase font-semibold text-zinc-400">
                     {show.vibe}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[#9CA3AF] line-clamp-2">
+              <p className="text-xs text-zinc-400 line-clamp-2">
                 {show.description || show.shortDescription}
               </p>
             </div>

@@ -61,7 +61,12 @@ function StationMainContent() {
             s.title === currentShow.title
         );
       if (match) {
-        const rawCoverImage = match.imageWithOverlay || match.coverImage || match.imageWithoutOverlay;
+        const rawCoverImage =
+          match.thumbnailWithOverlay ||
+          match.imageWithOverlay ||
+          match.coverImage ||
+          match.thumbnailWithoutOverlay ||
+          match.imageWithoutOverlay;
         const coverImageUrl = rawCoverImage
           ? urlForImage(rawCoverImage)?.width(800).height(800).fit("crop").url()
           : (match.imageUrl || DEFAULT_SHOW_IMAGES[currentShow.id] || DEFAULT_SHOW_IMAGES['truckers-tales-tacky-talk']);
@@ -73,8 +78,10 @@ function StationMainContent() {
           vibe: match.vibe || currentShow.vibe,
           jellyfinPlaylistId: match.jellyfinPlaylistId || currentShow.jellyfinPlaylistId,
           coverImage: rawCoverImage,
-          imageWithOverlay: match.imageWithOverlay || match.coverImage,
-          imageWithoutOverlay: match.imageWithoutOverlay,
+          thumbnailWithOverlay: match.thumbnailWithOverlay || match.imageWithOverlay || match.coverImage,
+          imageWithOverlay: match.thumbnailWithOverlay || match.imageWithOverlay || match.coverImage,
+          thumbnailWithoutOverlay: match.thumbnailWithoutOverlay || match.imageWithoutOverlay,
+          imageWithoutOverlay: match.thumbnailWithoutOverlay || match.imageWithoutOverlay,
           studioImage: match.studioImage,
           imageUrl: coverImageUrl || currentShow.imageUrl,
           hostIds: hostIds.length > 0 ? hostIds : currentShow.hostIds,
@@ -85,7 +92,7 @@ function StationMainContent() {
   }, [shows, currentShow.id, currentShow.title, updateShowMetadata]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0A0A0A] text-[#F3F4F6]">
+    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
       {/* 1. Spotify-Style Left Sidebar (collapsible desktop + drawer mobile) */}
       <Sidebar
         currentTab={activeTab}
@@ -99,12 +106,12 @@ function StationMainContent() {
       {/* 2. Main Scrollable Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile Top Header (only on < md screens) */}
-        <header className="h-14 bg-[#070707] border-b border-[#181818] px-4 flex items-center justify-between md:hidden shrink-0 z-30 select-none">
+        <header className="h-14 bg-background border-b border-zinc-900 px-4 flex items-center justify-between md:hidden shrink-0 z-30 select-none">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsMobileMenuOpen(true)}
               aria-label="Open navigation menu"
-              className="p-1.5 -ml-1 text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-[#141414] rounded-lg transition-colors cursor-pointer"
+              className="p-1.5 -ml-1 text-zinc-400 hover:text-foreground hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
             >
               <Menu size={22} />
             </button>
@@ -124,8 +131,8 @@ function StationMainContent() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#CCFF00] animate-pulse" />
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-accent-lime/10 text-accent-lime border border-accent-lime/20 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent-lime animate-pulse" />
               LIVE STREAM
             </span>
           </div>
@@ -139,13 +146,13 @@ function StationMainContent() {
               <div className="space-y-3 sm:space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#F3F4F6] font-[family-name:var(--font-heading)]">
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-heading">
                       Explore Shows
                     </h1>
                   </div>
                   <button
                     onClick={() => setActiveTab("shows")}
-                    className="text-xs font-semibold text-[#9CA3AF] hover:text-[#CCFF00] transition-colors cursor-pointer"
+                    className="text-xs font-semibold text-zinc-400 hover:text-accent-lime transition-colors cursor-pointer"
                   >
                     View All Shows →
                   </button>

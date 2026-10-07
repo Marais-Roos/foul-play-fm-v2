@@ -65,7 +65,7 @@ export function VibeGrid() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold tracking-tight text-[#F3F4F6] font-[family-name:var(--font-heading)]">
+      <h2 className="text-2xl font-bold tracking-tight text-foreground font-heading">
         Browse by Vibe
       </h2>
 
@@ -76,12 +76,12 @@ export function VibeGrid() {
             <button
               key={vibe.id}
               onClick={() => handleVibeClick(vibe)}
-              className="flex items-center gap-3.5 p-4 rounded-xl bg-[#181818] hover:bg-[#222222] transition-all border border-[#232326] hover:border-[#38383E] text-left group cursor-pointer"
+              className="flex items-center gap-3.5 p-4 rounded-xl bg-zinc-900/60 hover:bg-zinc-800/80 transition-all border border-zinc-800 hover:border-zinc-700 text-left group cursor-pointer"
             >
-              <div className="p-2 rounded-lg bg-[#242426] text-[#CCFF00] group-hover:scale-110 transition-transform">
+              <div className="p-2 rounded-lg bg-zinc-800 text-accent-lime group-hover:scale-110 transition-transform">
                 <Icon size={22} className="stroke-[2.2]" />
               </div>
-              <span className="text-sm font-semibold text-[#F3F4F6] group-hover:text-[#CCFF00] transition-colors font-[family-name:var(--font-heading)]">
+              <span className="text-sm font-semibold text-foreground group-hover:text-accent-lime transition-colors font-heading">
                 {vibe.label}
               </span>
             </button>

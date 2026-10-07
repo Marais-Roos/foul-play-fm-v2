@@ -41,7 +41,9 @@ export interface Show {
   description?: string;
   jellyfinPlaylistId?: string;
   coverImage?: any;
+  thumbnailWithOverlay?: any;
   imageWithOverlay?: any;
+  thumbnailWithoutOverlay?: any;
   imageWithoutOverlay?: any;
   studioImage?: any;
   imageUrl?: string;
@@ -60,6 +62,10 @@ export interface DJ {
   fishAudioVoiceId: string | null;
   voicePrompt?: string;
   bio?: string;
+  image?: any;
+  thumbnailImage?: any;
+  backdropImage?: any;
+  voiceSampleUrl?: string;
 }
 
 export interface SideCharacter {
@@ -73,6 +79,10 @@ export interface SideCharacter {
   recommendedPreviewText: string;
   voiceSampleFile: string;
   fishAudioVoiceId: string | null;
+  image?: any;
+  thumbnailImage?: any;
+  backdropImage?: any;
+  voiceSampleUrl?: string;
 }
 
 export interface CallerPersona {

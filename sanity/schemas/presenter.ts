@@ -20,12 +20,32 @@ export default defineType({
       },
     }),
     defineField({
-      name: 'image',
-      title: 'Profile Image',
+      name: 'thumbnailImage',
+      title: 'Thumbnail Image',
+      description: 'Square avatar or profile artwork for the presenter.',
       type: 'image',
       options: {
         hotspot: true,
       },
+    }),
+    defineField({
+      name: 'backdropImage',
+      title: 'Backdrop Image',
+      description: 'Studio backdrop or wide banner artwork for this presenter.',
+      type: 'image',
+      options: {
+        hotspot: true,
+      },
+    }),
+    defineField({
+      name: 'image',
+      title: 'Legacy Profile Image',
+      description: 'Previous profile image field maintained for backwards compatibility.',
+      type: 'image',
+      options: {
+        hotspot: true,
+      },
+      hidden: ({ document }) => !document?.image,
     }),
     defineField({
       name: 'bio',
@@ -65,7 +85,14 @@ export default defineType({
   preview: {
     select: {
       title: 'name',
-      media: 'image',
+      media: 'thumbnailImage',
+      fallbackMedia: 'image',
+    },
+    prepare({ title, media, fallbackMedia }) {
+      return {
+        title,
+        media: media || fallbackMedia,
+      };
     },
   },
 });

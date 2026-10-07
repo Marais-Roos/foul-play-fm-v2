@@ -57,7 +57,7 @@ export function Sidebar({
       {/* Sidebar Container */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 bg-[#070707] border-r border-[#181818] flex flex-col justify-between p-4 select-none
+          fixed inset-y-0 left-0 z-50 bg-background border-r border-zinc-900 flex flex-col justify-between p-4 select-none
           transition-all duration-300 ease-in-out
           md:static md:translate-x-0 md:z-auto
           ${isMobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full md:translate-x-0"}
@@ -76,16 +76,16 @@ export function Sidebar({
             <button
               onClick={() => onTabChange("home")}
               title="Foul Play FM - Home"
-              className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#182010] to-[#121212] border border-[#CCFF00]/40 flex items-center justify-center cursor-pointer hover:border-[#CCFF00] hover:scale-105 transition-all shadow-md shadow-[#CCFF00]/5"
+              className="w-11 h-11 rounded-xl bg-gradient-to-br from-zinc-900 to-background border border-accent-lime/40 flex items-center justify-center cursor-pointer hover:border-accent-lime hover:scale-105 transition-all shadow-md shadow-accent-lime/5"
             >
-              <Radio size={22} className="text-[#CCFF00]" />
+              <Radio size={22} className="text-accent-lime" />
             </button>
 
             <button
               onClick={onToggleCollapse}
               title="Expand sidebar"
               aria-label="Expand sidebar"
-              className="p-2 text-[#9CA3AF] hover:text-[#CCFF00] hover:bg-[#141414] rounded-lg transition-colors cursor-pointer"
+              className="p-2 text-zinc-400 hover:text-accent-lime hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
             >
               <PanelLeftOpen size={18} />
             </button>
@@ -121,7 +121,7 @@ export function Sidebar({
               onClick={onToggleCollapse}
               title="Collapse sidebar"
               aria-label="Collapse sidebar"
-              className="hidden md:flex p-1.5 text-[#9CA3AF] hover:text-[#CCFF00] hover:bg-[#141414] rounded-lg transition-colors cursor-pointer"
+              className="hidden md:flex p-1.5 text-zinc-400 hover:text-accent-lime hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
             >
               <PanelLeftClose size={18} />
             </button>
@@ -131,7 +131,7 @@ export function Sidebar({
               onClick={onCloseMobile}
               title="Close menu"
               aria-label="Close menu"
-              className="md:hidden p-1.5 text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-[#141414] rounded-lg transition-colors cursor-pointer"
+              className="md:hidden p-1.5 text-zinc-400 hover:text-foreground hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
             >
               <X size={20} />
             </button>
@@ -157,14 +157,14 @@ export function Sidebar({
                       : "px-3 py-2.5 gap-3.5"
                   } ${
                     isActive
-                      ? "bg-[#182010] text-[#CCFF00] shadow-sm shadow-[#CCFF00]/10"
-                      : "text-[#9CA3AF] hover:text-[#F3F4F6] hover:bg-[#121212]"
+                      ? "bg-accent-lime/10 text-accent-lime border border-accent-lime/20 shadow-sm shadow-accent-lime/10"
+                      : "text-zinc-400 hover:text-foreground hover:bg-zinc-900/60"
                   }`}
                 >
                   <div className="relative shrink-0">
                     <Icon
                       size={20}
-                      className={isActive ? "text-[#CCFF00]" : "text-[#9CA3AF]"}
+                      className={isActive ? "text-accent-lime" : "text-zinc-400"}
                     />
                   </div>
                   <span className={isCollapsed ? "md:hidden truncate" : "truncate"}>
@@ -178,7 +178,7 @@ export function Sidebar({
 
         {/* Bottom Sidebar: Mini Controls */}
         <div
-          className={`pt-4 border-t border-[#181818] flex items-center ${
+          className={`pt-4 border-t border-zinc-900 flex items-center ${
             isCollapsed
               ? "md:flex-col md:justify-center md:gap-3 md:px-0 flex-row gap-4 px-2"
               : "flex-row gap-4 px-2"
@@ -188,7 +188,7 @@ export function Sidebar({
             onClick={togglePlay}
             aria-label={isPlaying ? "Pause" : "Play"}
             title={isPlaying ? "Pause" : "Play"}
-            className="text-[#F3F4F6] hover:text-[#CCFF00] transition-colors cursor-pointer p-1"
+            className="text-foreground hover:text-accent-lime transition-colors cursor-pointer p-1"
           >
             {isPlaying ? (
               <Pause size={20} className="fill-current" />
@@ -201,7 +201,7 @@ export function Sidebar({
             onClick={toggleMute}
             aria-label={isMuted ? "Unmute" : "Mute"}
             title={isMuted ? "Unmute" : "Mute"}
-            className="text-[#9CA3AF] hover:text-[#F3F4F6] transition-colors cursor-pointer p-1"
+            className="text-zinc-400 hover:text-foreground transition-colors cursor-pointer p-1"
           >
             {isMuted ? <VolumeX size={19} /> : <Volume2 size={19} />}
           </button>

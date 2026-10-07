@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FOUL PLAY FM — Radio for people who wish they were deaf.",
+  title: "Foul Play FM | Radio for people who wish they were deaf.",
   description: "Radio for people who wish they were deaf. Broadcasting unfiltered satire 24/7.",
 };
 
@@ -21,7 +21,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="h-full bg-[#0A0A0A] text-[#F3F4F6] flex flex-col selection:bg-[#CCFF00] selection:text-black">
+      <body className="h-full bg-background text-foreground flex flex-col selection:bg-accent-lime selection:text-background">
         {children}
       </body>
     </html>

@@ -32,12 +32,31 @@ export default defineType({
       type: 'string',
     }),
     defineField({
-      name: 'image',
-      title: 'Profile Image',
+      name: 'thumbnailImage',
+      title: 'Thumbnail Image',
+      description: 'Square avatar or profile artwork for the side character.',
       type: 'image',
       options: {
         hotspot: true,
       },
+    }),
+    defineField({
+      name: 'backdropImage',
+      title: 'Backdrop Image',
+      description: 'Backdrop or banner image for this side character.',
+      type: 'image',
+      options: {
+        hotspot: true,
+      },
+    }),
+    defineField({
+      name: 'image',
+      title: 'Legacy Profile Image',
+      type: 'image',
+      options: {
+        hotspot: true,
+      },
+      hidden: ({ document }) => !document?.image,
     }),
     defineField({
       name: 'bio',
@@ -72,7 +91,15 @@ export default defineType({
     select: {
       title: 'name',
       subtitle: 'role',
-      media: 'image',
+      media: 'thumbnailImage',
+      fallbackMedia: 'image',
+    },
+    prepare({ title, subtitle, media, fallbackMedia }) {
+      return {
+        title,
+        subtitle,
+        media: media || fallbackMedia,
+      };
     },
   },
 });

@@ -52,17 +52,17 @@ export default defineType({
       type: 'text',
     }),
     defineField({
-      name: 'imageWithOverlay',
-      title: 'Image with Overlay',
-      description: 'Show promotional cover artwork with branding and title overlay.',
+      name: 'thumbnailWithOverlay',
+      title: 'Thumbnail with Overlay',
+      description: 'Show promotional cover artwork with station branding and title overlay.',
       type: 'image',
       options: {
         hotspot: true,
       },
     }),
     defineField({
-      name: 'imageWithoutOverlay',
-      title: 'Image without Overlay',
+      name: 'thumbnailWithoutOverlay',
+      title: 'Thumbnail without Overlay',
       description: 'Clean show/host artwork without graphic overlays or titles.',
       type: 'image',
       options: {
@@ -77,6 +77,24 @@ export default defineType({
       options: {
         hotspot: true,
       },
+    }),
+    defineField({
+      name: 'imageWithOverlay',
+      title: 'Legacy Image with Overlay',
+      type: 'image',
+      options: {
+        hotspot: true,
+      },
+      hidden: ({ document }) => !document?.imageWithOverlay,
+    }),
+    defineField({
+      name: 'imageWithoutOverlay',
+      title: 'Legacy Image without Overlay',
+      type: 'image',
+      options: {
+        hotspot: true,
+      },
+      hidden: ({ document }) => !document?.imageWithoutOverlay,
     }),
     defineField({
       name: 'vibe',
@@ -95,14 +113,15 @@ export default defineType({
     select: {
       title: 'title',
       subtitle: 'timeSlot',
-      media: 'imageWithOverlay',
+      media: 'thumbnailWithOverlay',
+      legacyMedia: 'imageWithOverlay',
       fallbackMedia: 'coverImage',
     },
-    prepare({ title, subtitle, media, fallbackMedia }) {
+    prepare({ title, subtitle, media, legacyMedia, fallbackMedia }) {
       return {
         title,
         subtitle: subtitle !== undefined ? `${subtitle.toString().padStart(2, '0')}:00` : undefined,
-        media: media || fallbackMedia,
+        media: media || legacyMedia || fallbackMedia,
       };
     },
   },

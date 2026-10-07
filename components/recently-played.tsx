@@ -38,18 +38,18 @@ export function RecentlyPlayed() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <h2 className="text-2xl font-bold tracking-tight text-[#F3F4F6] font-[family-name:var(--font-heading)]">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground font-heading">
             Recently Played
           </h2>
           {historyTracks.length > 0 && (
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#CCFF00]/10 text-[#CCFF00] border border-[#CCFF00]/20 font-bold">
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-accent-lime/10 text-accent-lime border border-accent-lime/20 font-bold">
               {historyTracks.length}
             </span>
           )}
         </div>
 
         {isPlaying && currentTrack && (
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-[#CCFF00] bg-[#CCFF00]/10 border border-[#CCFF00]/20 px-2 py-0.5 rounded">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-accent-lime bg-accent-lime/10 border border-accent-lime/20 px-2 py-0.5 rounded">
             <Radio size={11} className="animate-pulse" />
             Live Broadcast
           </span>
@@ -58,11 +58,11 @@ export function RecentlyPlayed() {
 
       {/* History Track List */}
       {historyTracks.length === 0 ? (
-        <div className="p-8 rounded-2xl bg-[#141416] border border-[#232326] text-center space-y-3">
-          <History size={26} className="mx-auto text-[#71717A]" />
+        <div className="p-8 rounded-2xl bg-zinc-900/60 border border-zinc-800 text-center space-y-3">
+          <History size={26} className="mx-auto text-zinc-500" />
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-[#F3F4F6]">No Broadcast History Yet</p>
-            <p className="text-xs text-[#9CA3AF] max-w-sm mx-auto leading-relaxed">
+            <p className="text-sm font-semibold text-foreground">No Broadcast History Yet</p>
+            <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
               Tracks will appear here with their exact air times as they are broadcast live on Foul Play FM. Press Play on the player to tune in!
             </p>
           </div>
@@ -77,13 +77,13 @@ export function RecentlyPlayed() {
                 key={`${track.id}-${idx}`}
                 className={`flex items-center justify-between p-2.5 px-3 rounded-xl transition-all border group ${
                   isCurrentlyPlaying
-                    ? "bg-[#1A2210] border-[#CCFF00]/50 shadow-md shadow-[#CCFF00]/5"
-                    : "bg-[#141416] hover:bg-[#1C1C20] border-[#232326]"
+                    ? "bg-accent-lime/10 border-accent-lime/50 shadow-md shadow-accent-lime/5"
+                    : "bg-zinc-900/60 hover:bg-zinc-800/80 border-zinc-800"
                 }`}
               >
                 {/* Left: Thumbnail & Details */}
                 <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="relative w-10 h-10 rounded-md overflow-hidden bg-[#242428] shrink-0 border border-[#333] flex items-center justify-center">
+                  <div className="relative w-10 h-10 rounded-md overflow-hidden bg-zinc-800 shrink-0 border border-zinc-700 flex items-center justify-center">
                     {track.albumArtUrl ? (
                       <Image
                         src={track.albumArtUrl}
@@ -95,7 +95,7 @@ export function RecentlyPlayed() {
                     ) : (
                       <Disc3
                         size={18}
-                        className={isCurrentlyPlaying ? "text-[#CCFF00] animate-spin" : "text-[#71717A]"}
+                        className={isCurrentlyPlaying ? "text-accent-lime animate-spin" : "text-zinc-500"}
                       />
                     )}
                   </div>
@@ -105,24 +105,24 @@ export function RecentlyPlayed() {
                       <span
                         className={`text-sm font-semibold truncate transition-colors ${
                           isCurrentlyPlaying
-                            ? "text-[#CCFF00]"
-                            : "text-[#F3F4F6] group-hover:text-[#CCFF00]"
+                            ? "text-accent-lime"
+                            : "text-foreground group-hover:text-accent-lime"
                         }`}
                       >
                         {track.title}
                       </span>
                       {isCurrentlyPlaying && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-[#CCFF00] text-black shrink-0">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-accent-lime text-background shrink-0">
                           On Air
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-[#9CA3AF] truncate">
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-400 truncate">
                       <span className="truncate">
                         {track.artist} {track.album ? `• ${track.album}` : ""}
                       </span>
                       {track.showTitle && (
-                        <span className="text-[10px] text-[#A1A1AA] bg-zinc-800/80 px-1.5 py-0.2 rounded shrink-0 font-medium">
+                        <span className="text-[10px] text-zinc-400 bg-zinc-800/80 px-1.5 py-0.2 rounded shrink-0 font-medium">
                           {track.showTitle}
                         </span>
                       )}
@@ -143,15 +143,15 @@ export function RecentlyPlayed() {
                     size={13}
                     className={
                       isCurrentlyPlaying
-                        ? "text-[#CCFF00] animate-pulse"
-                        : "text-[#71717A] group-hover:text-[#CCFF00] transition-colors"
+                        ? "text-accent-lime animate-pulse"
+                        : "text-zinc-500 group-hover:text-accent-lime transition-colors"
                     }
                   />
                   <span
                     className={
                       isCurrentlyPlaying
-                        ? "text-[#CCFF00] font-bold"
-                        : "text-[#9CA3AF] group-hover:text-[#F3F4F6] transition-colors"
+                        ? "text-accent-lime font-bold"
+                        : "text-zinc-400 group-hover:text-foreground transition-colors"
                     }
                   >
                     {track.playedAt || "--:--"}
