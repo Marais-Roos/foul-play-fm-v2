@@ -45,100 +45,87 @@ export function Sidebar({
 
   return (
     <>
-      {/* Mobile Drawer Backdrop Overlay */}
-      {isMobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300"
-          onClick={onCloseMobile}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Sidebar Container */}
+      {/* ======================================================== */}
+      {/* Desktop Sidebar: Exact Figma Navigation spec (md+ screens) */}
+      {/* Closed: 72px, Open: 256px, #0A0A0A background, py-12 px-4 */}
+      {/* ======================================================== */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 bg-background border-r border-zinc-900 flex flex-col justify-between p-4 select-none
-          transition-all duration-300 ease-in-out
-          md:static md:translate-x-0 md:z-auto
-          ${isMobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full md:translate-x-0"}
-          ${isCollapsed ? "md:w-20 md:p-3" : "md:w-60 md:p-4"}
-          w-64 shrink-0
+          hidden md:flex md:flex-col md:justify-between py-12 px-4 select-none
+          bg-[#0A0A0A] border-r border-zinc-900/80 shrink-0
+          transition-all duration-300 ease-out
+          ${isCollapsed ? "md:w-[72px]" : "md:w-[256px]"}
         `}
       >
-        {/* Top: Logo & Navigation */}
-        <div className="space-y-6">
-          {/* Desktop Collapsed Header: Mini station emblem & expand toggle */}
-          <div
-            className={`hidden ${
-              isCollapsed ? "md:flex flex-col items-center gap-3 pt-1" : "md:hidden"
-            }`}
-          >
-            <button
-              onClick={() => onTabChange("home")}
-              title="Foul Play FM - Home"
-              className="w-11 h-11 rounded-xl bg-gradient-to-br from-zinc-900 to-background border border-accent-lime/40 flex items-center justify-center cursor-pointer hover:border-accent-lime hover:scale-105 transition-all shadow-md shadow-accent-lime/5"
-            >
-              <Radio size={22} className="text-accent-lime" />
-            </button>
-
-            <button
-              onClick={onToggleCollapse}
-              title="Expand sidebar"
-              aria-label="Expand sidebar"
-              className="p-2 text-zinc-400 hover:text-accent-lime hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
-            >
-              <PanelLeftOpen size={18} />
-            </button>
-          </div>
-
-          {/* Desktop Expanded Header OR Mobile Drawer Header */}
-          <div
-            className={`flex items-center justify-between pt-1 px-1 ${
-              isCollapsed ? "md:hidden" : "flex"
-            }`}
-          >
-            <div
-              className="cursor-pointer flex items-center"
-              onClick={() => {
-                onTabChange("home");
-                onCloseMobile?.();
-              }}
-            >
-              <div className="relative w-36 h-11">
+        {/* Top: Branding & Navigation Section */}
+        <div className="flex flex-col">
+          {/* 1. Collapsed Desktop Header (Frame 86: 40px icon + toggle) */}
+          {isCollapsed ? (
+            <div className="flex flex-col items-center gap-12">
+              {/* Foul Play FM Mini Emblem Logo (40x25.7px) */}
+              <button
+                onClick={() => onTabChange("home")}
+                title="Foul Play FM - Home"
+                aria-label="Foul Play FM Home"
+                className="w-10 h-[26px] relative cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"
+              >
                 <Image
-                  src="/images/logo.png"
+                  src="/images/icon.svg"
                   alt="Foul Play FM"
                   fill
-                  sizes="144px"
+                  className="object-contain"
+                  priority
+                />
+              </button>
+
+              {/* Expand Sidebar Toggle (Frame 85: 40x40px, 300ms ease-out) */}
+              <button
+                onClick={onToggleCollapse}
+                title="Expand sidebar"
+                aria-label="Expand sidebar"
+                className="w-10 h-10 flex items-center justify-center text-zinc-300 hover:text-[#CCFF00] hover:bg-white/5 rounded-[6px] transition-colors cursor-pointer focus:outline-none"
+              >
+                <PanelLeftOpen size={22} />
+              </button>
+            </div>
+          ) : (
+            /* 2. Expanded Desktop Header (Frame 135: wordmark + Frame 92: toggle & heading) */
+            <div className="flex flex-col">
+              {/* Wordmark Logo (Frame 135: 224x34.6px) */}
+              <div
+                className="cursor-pointer flex items-center w-[224px] h-[35px] relative hover:opacity-90 transition-opacity"
+                onClick={() => onTabChange("home")}
+              >
+                <Image
+                  src="/images/logo-wide.svg"
+                  alt="Foul Play FM"
+                  fill
+                  sizes="224px"
                   className="object-contain object-left"
                   priority
                 />
               </div>
+
+              {/* Sub-header row (Frame 92: Toggle + "Explore the station") */}
+              <div className="flex items-center gap-4 mt-6">
+                <button
+                  onClick={onToggleCollapse}
+                  title="Collapse sidebar"
+                  aria-label="Collapse sidebar"
+                  className="w-10 h-10 flex items-center justify-center text-zinc-300 hover:text-[#CCFF00] hover:bg-white/5 rounded-[6px] transition-colors cursor-pointer shrink-0 focus:outline-none"
+                >
+                  <PanelLeftClose size={22} />
+                </button>
+
+                <span className="text-base font-semibold text-white tracking-tight select-none">
+                  Explore the station
+                </span>
+              </div>
             </div>
+          )}
 
-            {/* Desktop Collapse Toggle */}
-            <button
-              onClick={onToggleCollapse}
-              title="Collapse sidebar"
-              aria-label="Collapse sidebar"
-              className="hidden md:flex p-1.5 text-zinc-400 hover:text-accent-lime hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
-            >
-              <PanelLeftClose size={18} />
-            </button>
-
-            {/* Mobile Close Button */}
-            <button
-              onClick={onCloseMobile}
-              title="Close menu"
-              aria-label="Close menu"
-              className="md:hidden p-1.5 text-zinc-400 hover:text-foreground hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          {/* Navigation Menu */}
-          <nav className="space-y-1.5">
+          {/* 3. Navigation Menu Items (Frame 87: 24px gap between items) */}
+          <nav className="mt-12 space-y-6 flex flex-col">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentTab === item.id;
@@ -146,54 +133,64 @@ export function Sidebar({
               return (
                 <button
                   key={item.id}
-                  onClick={() => {
-                    onTabChange(item.id);
-                    onCloseMobile?.();
-                  }}
+                  onClick={() => onTabChange(item.id)}
                   title={item.label}
-                  className={`w-full flex items-center rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                    isCollapsed
-                      ? "md:justify-center md:px-0 md:py-2.5 px-3 py-2.5 gap-3.5"
-                      : "px-3 py-2.5 gap-3.5"
-                  } ${
-                    isActive
-                      ? "bg-accent-lime/10 text-accent-lime border border-accent-lime/20 shadow-sm shadow-accent-lime/10"
-                      : "text-zinc-400 hover:text-foreground hover:bg-zinc-900/60"
-                  }`}
+                  className={`
+                    transition-all duration-200 cursor-pointer rounded-[6px] focus:outline-none
+                    ${isCollapsed
+                      ? "w-10 h-10 justify-center px-0 flex items-center"
+                      : "w-full h-10 px-4 flex items-center gap-6"
+                    }
+                    ${isActive
+                      ? "bg-[#CCFF00]/15"
+                      : "bg-transparent hover:bg-white/5"
+                    }
+                  `}
                 >
-                  <div className="relative shrink-0">
+                  {/* Icon (24x24px, #CCFF00 brand color) */}
+                  <div className="w-6 h-6 shrink-0 flex items-center justify-center">
                     <Icon
-                      size={20}
-                      className={isActive ? "text-accent-lime" : "text-zinc-400"}
+                      size={24}
+                      className={
+                        isActive
+                          ? "text-[#CCFF00]"
+                          : "text-[#CCFF00]/80 hover:text-[#CCFF00] transition-colors"
+                      }
                     />
                   </div>
-                  <span className={isCollapsed ? "md:hidden truncate" : "truncate"}>
-                    {item.label}
-                  </span>
+
+                  {/* Label (18px Inter, Medium when active, Regular when default, White) */}
+                  {!isCollapsed && (
+                    <span
+                      className={`text-lg text-white truncate ${isActive ? "font-medium" : "font-normal"
+                        }`}
+                    >
+                      {item.label}
+                    </span>
+                  )}
                 </button>
               );
             })}
           </nav>
         </div>
 
-        {/* Bottom Sidebar: Mini Controls */}
+        {/* Bottom Section: Desktop Mini Audio Controls */}
         <div
-          className={`pt-4 border-t border-zinc-900 flex items-center ${
-            isCollapsed
-              ? "md:flex-col md:justify-center md:gap-3 md:px-0 flex-row gap-4 px-2"
-              : "flex-row gap-4 px-2"
-          }`}
+          className={`pt-6 border-t border-zinc-900/60 flex items-center ${isCollapsed
+            ? "flex-col justify-center gap-4 px-0"
+            : "flex-row gap-4 px-2"
+            }`}
         >
           <button
             onClick={togglePlay}
             aria-label={isPlaying ? "Pause" : "Play"}
             title={isPlaying ? "Pause" : "Play"}
-            className="text-foreground hover:text-accent-lime transition-colors cursor-pointer p-1"
+            className="w-9 h-9 flex items-center justify-center text-zinc-300 hover:text-[#CCFF00] hover:bg-white/5 rounded-[6px] transition-colors cursor-pointer focus:outline-none"
           >
             {isPlaying ? (
               <Pause size={20} className="fill-current" />
             ) : (
-              <Play size={20} className="fill-current" />
+              <Play size={20} className="fill-current ml-0.5" />
             )}
           </button>
 
@@ -201,12 +198,60 @@ export function Sidebar({
             onClick={toggleMute}
             aria-label={isMuted ? "Unmute" : "Mute"}
             title={isMuted ? "Unmute" : "Mute"}
-            className="text-zinc-400 hover:text-foreground transition-colors cursor-pointer p-1"
+            className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/5 rounded-[6px] transition-colors cursor-pointer focus:outline-none"
           >
-            {isMuted ? <VolumeX size={19} /> : <Volume2 size={19} />}
+            {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
           </button>
         </div>
       </aside>
+
+      {/* ======================================================== */}
+      {/* Mobile Bottom Navbar (Figma Variant: Tablet/Mobile 155:2221) */}
+      {/* Tied to the bottom, full width with 16px margin on each side */}
+      {/* Height: 70px, bg: #0A0A0A/50, backdrop-blur: 15px, radius: 6px */}
+      {/* Multi-layer drop shadow and 4 vertical icon+label tab buttons */}
+      {/* ======================================================== */}
+      <nav
+        aria-label="Mobile navigation"
+        className="
+          md:hidden fixed bottom-3 left-4 right-4 z-50 h-[70px]
+          bg-[#0A0A0A]/50 backdrop-blur-[15px] rounded-[6px]
+          border border-white/10
+          shadow-[0_3px_6px_rgba(0,0,0,0.1),0_10px_10px_rgba(0,0,0,0.09),0_23px_14px_rgba(0,0,0,0.05),0_41px_16px_rgba(0,0,0,0.01)]
+          px-6 py-2 flex items-center justify-between select-none
+        "
+      >
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = currentTab === item.id;
+
+          return (
+            <button
+              key={item.id}
+              onClick={() => {
+                onTabChange(item.id);
+                onCloseMobile?.();
+              }}
+              title={item.label}
+              className={`
+                flex flex-col items-center justify-center gap-1 min-w-[50px] py-1 cursor-pointer transition-opacity focus:outline-none
+                ${isActive ? "opacity-100" : "opacity-50 hover:opacity-80"}
+              `}
+            >
+              {/* Icon (24x24px, #CCFF00 brand color) */}
+              <div className="w-6 h-6 flex items-center justify-center">
+                <Icon size={24} className="text-[#CCFF00]" />
+              </div>
+
+              {/* Text label (8px Inter Regular, White) */}
+              <span className="text-[8px] font-normal leading-tight text-white tracking-normal">
+                {item.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
     </>
   );
 }
+

@@ -183,11 +183,11 @@ export function findMatchingLocalDJ(identifier?: string, name?: string): DJ | un
       return dj;
     }
 
-    // Substring fallback
-    if (cleanId && (djCleanId.includes(cleanId) || cleanId.includes(djCleanId))) {
+    // Substring fallback (only if both identifiers/names have minimum length to prevent empty string matches)
+    if (cleanId && cleanId.length >= 4 && djCleanId && djCleanId.length >= 4 && (djCleanId.includes(cleanId) || cleanId.includes(djCleanId))) {
       return dj;
     }
-    if (cleanName && (djCleanName.includes(cleanName) || cleanName.includes(djCleanName))) {
+    if (cleanName && cleanName.length >= 4 && djCleanName && djCleanName.length >= 4 && (djCleanName.includes(cleanName) || cleanName.includes(djCleanName))) {
       return dj;
     }
   }
@@ -369,32 +369,50 @@ export function findMatchingShow(identifier?: string, title?: string, pool?: Sho
   const cleanTitle = clean(rawTitle);
 
   for (const show of shows) {
-    const sId = (show.id || '').toLowerCase();
+    const rawShowSlug = (show as any).slug;
+    const rawShowDocId = (show as any)._id;
+    const sId = (show.id || rawShowSlug || rawShowDocId || '').toLowerCase();
     const sTitle = (show.title || '').toLowerCase();
     const sCleanId = clean(sId);
     const sCleanTitle = clean(sTitle);
 
-    // 1. Exact matches
-    if (show.id === identifier || sId === rawId || show.title === title || sTitle === rawTitle) {
+    // 1. Exact matches (checking show.id, Sanity slug, Sanity _id, and title)
+    if (
+      show.id === identifier ||
+      rawShowSlug === identifier ||
+      rawShowDocId === identifier ||
+      (sId && sId === rawId) ||
+      (show.title && show.title === title) ||
+      (sTitle && sTitle === rawTitle)
+    ) {
       return show;
     }
 
     // 2. Normalized matches (stripping 'and', '&', punctuation)
-    if (cleanId && (sCleanId === cleanId || sCleanTitle === cleanId)) {
+    if (cleanId && sCleanId && sCleanId === cleanId) {
       return show;
     }
-    if (cleanTitle && (sCleanTitle === cleanTitle || sCleanId === cleanTitle)) {
+    if (cleanId && sCleanTitle && sCleanTitle === cleanId) {
+      return show;
+    }
+    if (cleanTitle && sCleanTitle && sCleanTitle === cleanTitle) {
+      return show;
+    }
+    if (cleanTitle && sCleanId && sCleanId === cleanTitle) {
       return show;
     }
 
     // 3. Token match: check if all non-stop words match
     const idTokens = rawId.split(/[-_\s]+/).filter(t => t && t !== 'and' && t !== '&');
-    if (idTokens.length >= 2 && idTokens.every(tok => sId.includes(tok) || sTitle.includes(tok))) {
+    if (idTokens.length >= 2 && idTokens.every(tok => (sId && sId.includes(tok)) || (sTitle && sTitle.includes(tok)))) {
       return show;
     }
 
-    // 4. Substring containment fallback
-    if (cleanId && cleanId.length >= 5 && (sCleanId.includes(cleanId) || cleanId.includes(sCleanId))) {
+    // 4. Substring containment fallback (requires minimum 5 chars on BOTH to prevent empty/short string collisions)
+    if (cleanId.length >= 5 && sCleanId.length >= 5 && (sCleanId.includes(cleanId) || cleanId.includes(sCleanId))) {
+      return show;
+    }
+    if (cleanTitle.length >= 5 && sCleanTitle.length >= 5 && (sCleanTitle.includes(cleanTitle) || cleanTitle.includes(sCleanTitle))) {
       return show;
     }
   }

@@ -65,7 +65,11 @@ export function useSanityStation() {
         ]);
 
         if (Array.isArray(sanityShows) && sanityShows.length > 0) {
-          setShows(sanityShows);
+          const normalizedShows = sanityShows.map((s: any) => ({
+            ...s,
+            id: s.slug || s._id,
+          }));
+          setShows(normalizedShows);
           setSource("sanity");
         } else {
           setShows(stationBible.shows);

@@ -67,12 +67,14 @@ function StationMainContent() {
           match.coverImage ||
           match.thumbnailWithoutOverlay ||
           match.imageWithoutOverlay;
+        const resolvedShowId = match.slug || match.id || currentShow.id;
         const coverImageUrl = rawCoverImage
           ? urlForImage(rawCoverImage)?.width(800).height(800).fit("crop").url()
-          : (match.imageUrl || DEFAULT_SHOW_IMAGES[currentShow.id] || DEFAULT_SHOW_IMAGES['truckers-tales-tacky-talk']);
+          : (match.imageUrl || DEFAULT_SHOW_IMAGES[resolvedShowId] || DEFAULT_SHOW_IMAGES['truckers-tales-tacky-talk']);
         const hostIds = match.hosts?.map((h: any) => h.slug || h._id) || [];
         const hostNames = match.hosts?.map((h: any) => h.name).join(' & ');
         updateShowMetadata({
+          id: resolvedShowId,
           title: match.title || currentShow.title,
           description: match.description || currentShow.description,
           vibe: match.vibe || currentShow.vibe,
@@ -107,27 +109,18 @@ function StationMainContent() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Mobile Top Header (only on < md screens) */}
         <header className="h-14 bg-background border-b border-zinc-900 px-4 flex items-center justify-between md:hidden shrink-0 z-30 select-none">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsMobileMenuOpen(true)}
-              aria-label="Open navigation menu"
-              className="p-1.5 -ml-1 text-zinc-400 hover:text-foreground hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
-            >
-              <Menu size={22} />
-            </button>
-            <div
-              className="relative w-32 h-8 cursor-pointer flex items-center"
-              onClick={() => setActiveTab("home")}
-            >
-              <Image
-                src="/images/logo.png"
-                alt="Foul Play FM"
-                fill
-                sizes="128px"
-                className="object-contain object-left"
-                priority
-              />
-            </div>
+          <div
+            className="relative w-32 h-8 cursor-pointer flex items-center"
+            onClick={() => setActiveTab("home")}
+          >
+            <Image
+              src="/images/logo.png"
+              alt="Foul Play FM"
+              fill
+              sizes="128px"
+              className="object-contain object-left"
+              priority
+            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -139,7 +132,7 @@ function StationMainContent() {
         </header>
 
         {/* Scrollable Viewport */}
-        <main className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-6 space-y-6 md:space-y-8 pb-32 md:pb-36">
+        <main className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-6 space-y-6 md:space-y-8 pb-52 md:pb-36">
           {activeTab === "home" && (
             <div className="space-y-6 md:space-y-8 animate-in fade-in duration-300">
               {/* Header: Explore Shows */}
@@ -180,8 +173,8 @@ function StationMainContent() {
         </main>
       </div>
 
-      {/* 3. Bottom Persistent Audio Player Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50">
+      {/* 3. Bottom Persistent Audio Player Bar (stacked above bottom navbar on mobile) */}
+      <div className="fixed bottom-[86px] md:bottom-0 left-0 right-0 z-40 md:z-50">
         <AudioPlayerBar />
       </div>
     </div>
